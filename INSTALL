@@ -1,9 +1,9 @@
-Building NovaCoin
+Building BitBix
 
-See doc/readme-qt.rst for instructions on building NovaCoin Qt,
+See doc/readme-qt.rst for instructions on building BitBix Qt,
 the intended-for-end-users, nice-graphical-interface, reference
-implementation of NovaCoin.
+implementation of BitBix.
 
-See doc/build-*.txt for instructions on building novacoind,
+See doc/build-*.txt for instructions on building bitbixd,
 the intended-for-services, no-graphical-interface, reference
-implementation of NovaCoin.
+implementation of BitBix.

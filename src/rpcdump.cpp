@@ -36,7 +36,7 @@ Value importprivkey(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() < 1 || params.size() > 3)
         throw runtime_error(
-            "importprivkey <novacoinprivkey> [label] [rescan=true]\n"
+            "importprivkey <bitbixprivkey> [label] [rescan=true]\n"
             "Adds a private key (as returned by dumpprivkey) to your wallet.");
 
     EnsureWalletIsUnlocked();
@@ -108,7 +108,7 @@ Value importaddress(const Array& params, bool fHelp)
         std::vector<unsigned char> data(ParseHex(params[0].get_str()));
         script = CScript(data.begin(), data.end());
     } else
-        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid Novacoin address or script");
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid Bitbix address or script");
 
     string strLabel = "";
     if (params.size() > 1)
@@ -207,15 +207,15 @@ Value dumpprivkey(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() != 1)
         throw runtime_error(
-            "dumpprivkey <novacoinaddress>\n"
-            "Reveals the private key corresponding to <novacoinaddress>.");
+            "dumpprivkey <bitbixaddress>\n"
+            "Reveals the private key corresponding to <bitbixaddress>.");
 
     EnsureWalletIsUnlocked();
 
     string strAddress = params[0].get_str();
     CBitcoinAddress address;
     if (!address.SetString(strAddress))
-        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid NovaCoin address");
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid BitBix address");
     if (fWalletUnlockMintOnly)
         throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Wallet is unlocked for minting only.");
     CKeyID keyID;
@@ -232,8 +232,8 @@ Value dumppem(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() != 3)
         throw runtime_error(
-            "dumppem <novacoinaddress> <filename> <passphrase>\n"
-            "Dump the key pair corresponding to <novacoinaddress> and store it as encrypted PEM file."
+            "dumppem <bitbixaddress> <filename> <passphrase>\n"
+            "Dump the key pair corresponding to <bitbixaddress> and store it as encrypted PEM file."
             + HelpRequiringPassphrase());
 
     EnsureWalletIsUnlocked();
@@ -245,7 +245,7 @@ Value dumppem(const Array& params, bool fHelp)
 
     CBitcoinAddress address;
     if (!address.SetString(strAddress))
-        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid NovaCoin address");
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid BitBix address");
     if (fWalletUnlockMintOnly)
         throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Wallet is unlocked for minting only.");
     CKeyID keyID;

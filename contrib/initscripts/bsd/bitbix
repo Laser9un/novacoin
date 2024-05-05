@@ -1,0 +1,68 @@
+#!/bin/sh
+
+# PROVIDE: bitbix
+# REQUIRE: LOGIN
+# KEYWORD: shutdown
+
+#
+# Add the following lines to /etc/rc.conf.local or /etc/rc.conf
+# to enable this service:
+#
+# bitbix_enable (bool): Set to NO by default. Set this variable to YES if you want to enable bitbix service.
+# bitbix_config (path): Set to /usr/local/etc/bitbix.conf by default.
+# bitbix_user:  The user account bitbix daemon runs as. It uses 'root' user by default.
+# bitbix_group: The group account bitbix daemon runs as. It uses 'wheel' group by default.
+# bitbix_datadir (str): Default to "/var/db/bitbix". Base data directory.
+
+. /etc/rc.subr
+
+name=bitbix
+rcvar=bitbix_enable
+
+: ${bitbix_enable:=NO}
+: ${bitbix_config=/usr/local/etc/bitbix.conf}
+: ${bitbix_datadir=/var/db/bitbix}
+: ${bitbix_user="root"}
+: ${bitbix_group="wheel"}
+
+required_files=${bitbix_config}
+command=/usr/local/bin/bitbixd
+bitbix_chdir=${bitbix_datadir}
+pidfile="${bitbix_datadir}/bitbixd.pid"
+stop_cmd=bitbix_stop
+command_args="-conf=${bitbix_config} -datadir=${bitbix_datadir} -daemon -pid=${pidfile}"
+start_precmd="${name}_prestart"
+
+bitbix_create_datadir()
+{
+	echo "Creating data directory"
+	eval mkdir -p ${bitbix_datadir}
+	[ $? -eq 0 ] && chown -R ${bitbix_user}:${bitbix_group} ${bitbix_datadir}
+}
+
+bitbix_prestart()
+{
+	if [ ! -d "${bitbix_datadir}/." ]; then
+		bitbix_create_datadir || return 1
+	fi
+}
+
+bitbix_requirepidfile()
+{
+	if [ ! "0`check_pidfile ${pidfile} ${command}`" -gt 1 ]; then
+		echo "${name} not running? (check $pidfile)."
+		exit 1
+	fi
+}
+
+bitbix_stop()
+{
+    bitbix_requirepidfile
+
+	echo "Stopping ${name}."
+	eval ${command} -conf=${bitbix_config} -datadir=${bitbix_datadir} stop
+	wait_for_pids ${rc_pid}
+}
+
+load_rc_config $name
+run_rc_command "$1"

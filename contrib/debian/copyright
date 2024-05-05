@@ -1,15 +1,15 @@
 Format: http://svn.debian.org/wsvn/dep/web/deps/dep5.mdwn?rev=174
-Upstream-Name: Novacoin
+Upstream-Name: Bitbix
 Upstream-Contact: Alex D. <balthazar.ad@gmail.com>
-Source: http://sourceforge.net/projects/novacoin/files/
- https://github.com/novacoin-project/novacoin
+Source: http://sourceforge.net/projects/bitbix/files/
+ https://github.com/bitbix-project/bitbix
 
 Files: *
-Copyright: 2012-2015, Novacoin Developers
+Copyright: 2024, Ymakanic Labs
 License: Expat
 
 Files: *
-Copyright: 2009-2015, Bitcoin Developers
+Copyright: 2009, Satoshi Nakamoto
 License: Expat
 Comment: The Bitcoin Developers encompasses the current developers listed on bitcoin.org,
          as well as the numerous contributors to the project.

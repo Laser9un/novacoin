@@ -1,0 +1,2 @@
+debian/bin/bitbixd usr/bin
+src/bitbixd usr/lib/bitbix

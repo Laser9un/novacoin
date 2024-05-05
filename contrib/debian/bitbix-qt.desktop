@@ -1,0 +1,13 @@
+[Desktop Entry]
+Encoding=UTF-8
+Name=BitBix
+Comment=BitBix P2P Cryptocurrency
+Comment[ru]=BitBix, P2P криптовалюта
+Comment[fr]=BitBix, monnaie virtuelle cryptographique pair à pair
+Comment[tr]=BitBix, eşten eşe kriptografik sanal para birimi
+Exec=/usr/bin/bitbix-qt
+Terminal=false
+Type=Application
+Icon=/usr/share/pixmaps/bitbix80.xpm
+MimeType=x-scheme-handler/bitbix;
+Categories=Office;

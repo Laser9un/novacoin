@@ -1,0 +1,5 @@
+bitbix-qt usr/bin
+share/pixmaps/bitbix32.xpm usr/share/pixmaps
+share/pixmaps/bitbix80.xpm usr/share/pixmaps
+debian/bitbix-qt.desktop usr/share/applications
+debian/bitbix-qt.protocol usr/share/kde4/services/

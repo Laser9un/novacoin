@@ -1,8 +1,8 @@
-// Copyright (c) 2013-2016 The NovaCoin developers
+// Copyright (c) 2013-2016 The BitBix developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php
-#ifndef NOVACOIN_NTP_H
-#define NOVACOIN_NTP_H
+#ifndef BITBIX_NTP_H
+#define BITBIX_NTP_H
 
 // Get time from random server and return server address.
 int64_t NtpGetTime(CNetAddr& ip);
@@ -18,4 +18,4 @@ void ThreadNtpSamples(void* parg);
 // NTP offset
 int64_t GetNtpOffset();
 
-#endif // NOVACOIN_NTP_H
+#endif // BITBIX_NTP_H

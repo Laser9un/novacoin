@@ -1,5 +1,5 @@
 src/*.exe
-src/novacoind
+src/bitbixd
 src/build.h
 .*.swp
 *.*~*
@@ -8,11 +8,11 @@ src/build.h
 *.orig
 *.o
 *.patch
-.novacoin
+.bitbix
 #compilation and Qt preprocessor part
 *.qm
 Makefile
-novacoin-qt
+bitbix-qt
 #resources cpp
 qrc_*.cpp
 #qt creator

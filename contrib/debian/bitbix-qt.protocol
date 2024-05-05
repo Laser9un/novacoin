@@ -1,0 +1,11 @@
+[Protocol]
+exec=bitbix-qt '%u'
+protocol=bitbix
+input=none
+output=none
+helper=true
+listing=
+reading=false
+writing=false
+makedir=false
+deleting=false

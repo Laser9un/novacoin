@@ -1,16 +1,16 @@
-TOR SUPPORT IN NOVACOIN
+TOR SUPPORT IN BITBIX
 ======================
 
-It is possible to run Novacoin as a Tor hidden service, and connect to such services.
+It is possible to run Bitbix as a Tor hidden service, and connect to such services.
 
 The following directions assume you have a Tor proxy running on port 9050. Many distributions default to having a SOCKS proxy listening on port 9050, but others may not. In particular, the Tor Browser Bundle defaults to listening on a random port. See [Tor Project FAQ:TBBSocksPort](https://www.torproject.org/docs/faq.html.en#TBBSocksPort) for how to properly
 configure Tor.
 
 
-1. Run novacoin behind a Tor proxy
+1. Run bitbix behind a Tor proxy
 ---------------------------------
 
-The first step is running Novacoin behind a Tor proxy. This will already make all
+The first step is running Bitbix behind a Tor proxy. This will already make all
 outgoing connections be anonymized, but more is possible.
 
 	-proxy=ip:port  Set the proxy server. If SOCKS5 is selected (default), this proxy
@@ -31,27 +31,27 @@ outgoing connections be anonymized, but more is possible.
 
 In a typical situation, this suffices to run behind a Tor proxy:
 
-	./novacoin -proxy=127.0.0.1:9050
+	./bitbix -proxy=127.0.0.1:9050
 
 
-2. Run a novacoin hidden server
+2. Run a bitbix hidden server
 ------------------------------
 
 If you configure your Tor system accordingly, it is possible to make your node also
 reachable from the Tor network. Add these lines to your /etc/tor/torrc (or equivalent
 config file):
 
-	HiddenServiceDir /var/lib/tor/novacoin-service/
-	HiddenServicePort 7777 127.0.0.1:7777
-	HiddenServicePort 17777 127.0.0.1:17777
+	HiddenServiceDir /var/lib/tor/bitbix-service/
+	HiddenServicePort 6666 127.0.0.1:6666
+	HiddenServicePort 16666 127.0.0.1:16666
 
 The directory can be different of course, but (both) port numbers should be equal to
-your novacoind's P2P listen port (7777 by default, 17777 by default for testnet).
+your bitbixd's P2P listen port (6666 by default, 16666 by default for testnet).
 
-	-externalip=X   You can tell novacoin about its publicly reachable address using
+	-externalip=X   You can tell bitbix about its publicly reachable address using
 	                this option, and this can be a .onion address. Given the above
 	                configuration, you can find your onion address in
-	                /var/lib/tor/novacoin-service/hostname. Onion addresses are given
+	                /var/lib/tor/bitbix-service/hostname. Onion addresses are given
 	                preference for your node to advertize itself with, for connections
 	                coming from unroutable addresses (such as 127.0.0.1, where the
 	                Tor proxy typically runs).
@@ -68,22 +68,22 @@ your novacoind's P2P listen port (7777 by default, 17777 by default for testnet)
 
 In a typical situation, where you're only reachable via Tor, this should suffice:
 
-	./novacoind -proxy=127.0.0.1:9050 -externalip=youraddress.onion -listen
+	./bitbixd -proxy=127.0.0.1:9050 -externalip=youraddress.onion -listen
 
 (obviously, replace the Onion address with your own). If you don't care too much
 about hiding your node, and want to be reachable on IPv4 as well, additionally
 specify:
 
-	./novacoind ... -discover
+	./bitbixd ... -discover
 
-and open port 7777 on your firewall.
+and open port 6666 on your firewall.
 
 If you only want to use Tor to reach onion addresses, but not use it as a proxy
 for normal IPv4/IPv6 communication, use:
 
-	./novacoin -onion=127.0.0.1:9050 -externalip=youraddress.onion -discover
+	./bitbix -onion=127.0.0.1:9050 -externalip=youraddress.onion -discover
 
-Known addresses of novacoin nodes
+Known addresses of bitbix nodes
 
 	seedp4knqnoei57u.onion
 	seedr3hhlepyi7fd.onion

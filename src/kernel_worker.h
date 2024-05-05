@@ -1,5 +1,5 @@
-#ifndef NOVACOIN_KERNELWORKER_H
-#define NOVACOIN_KERNELWORKER_H
+#ifndef BITBIX_KERNELWORKER_H
+#define BITBIX_KERNELWORKER_H
 
 #include <vector>
 
@@ -33,4 +33,4 @@ private:
 // Scan given kernel for solutions
 bool ScanKernelBackward(unsigned char *kernel, uint32_t nBits, uint32_t nInputTxTime, int64_t nValueIn, std::pair<uint32_t, uint32_t> &SearchInterval, std::pair<uint256, uint32_t> &solution);
 
-#endif // NOVACOIN_KERNELWORKER_H
+#endif // BITBIX_KERNELWORKER_H
