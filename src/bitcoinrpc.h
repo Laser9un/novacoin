@@ -6,15 +6,18 @@
 #ifndef _BITCOINRPC_H_
 #define _BITCOINRPC_H_ 1
 
-#include "checkpoints.h"
+#include <string>
+#include <list>
+#include <map>
+
+class CBlockIndex;
 
 #include "json/json_spirit_reader_template.h"
 #include "json/json_spirit_writer_template.h"
 #include "json/json_spirit_utils.h"
 
-#include <string>
-#include <list>
-#include <map>
+#include "util.h"
+#include "checkpoints.h"
 
 // HTTP status codes
 enum HTTPStatusCode
@@ -65,8 +68,7 @@ enum RPCErrorCode
 
 json_spirit::Object JSONRPCError(int code, const std::string& message);
 
-void StartRPCServer();
-void StopRPCServer();
+void ThreadRPCServer(void* parg);
 int CommandLineRPC(int argc, char *argv[]);
 
 /** Convert parameter values for RPC call from strings to command-specific JSON objects. */
@@ -106,8 +108,8 @@ private:
     std::map<std::string, const CRPCCommand*> mapCommands;
 public:
     CRPCTable();
-    const CRPCCommand* operator[](const std::string& name) const;
-    std::string help(const std::string& name) const;
+    const CRPCCommand* operator[](std::string name) const;
+    std::string help(std::string name) const;
 
     /**
      * Execute a method.
@@ -117,12 +119,6 @@ public:
      * @throws an exception (json_spirit::Value) when an error happens.
      */
     json_spirit::Value execute(const std::string &method, const json_spirit::Array &params) const;
-
-    /**
-    * Returns a list of registered commands
-    * @returns List of registered commands.
-    */
-    std::vector<std::string> listCommands() const;
 };
 
 extern const CRPCTable tableRPC;
@@ -143,10 +139,10 @@ extern void EnsureWalletIsUnlocked();
 // Utilities: convert hex-encoded Values
 // (throws error if not hex).
 //
-extern uint256 ParseHashV(const json_spirit::Value& v, const std::string& strName);
-extern uint256 ParseHashO(const json_spirit::Object& o, const std::string& strKey);
-extern std::vector<unsigned char> ParseHexV(const json_spirit::Value& v, const std::string& strName);
-extern std::vector<unsigned char> ParseHexO(const json_spirit::Object& o, const std::string& strKey); 
+extern uint256 ParseHashV(const json_spirit::Value& v, std::string strName);
+extern uint256 ParseHashO(const json_spirit::Object& o, std::string strKey);
+extern std::vector<unsigned char> ParseHexV(const json_spirit::Value& v, std::string strName);
+extern std::vector<unsigned char> ParseHexO(const json_spirit::Object& o, std::string strKey); 
 
 extern json_spirit::Value getconnectioncount(const json_spirit::Array& params, bool fHelp); // in rpcnet.cpp
 extern json_spirit::Value getpeerinfo(const json_spirit::Array& params, bool fHelp);
@@ -216,6 +212,12 @@ extern json_spirit::Value adjustmalleablepubkey(const json_spirit::Array& params
 extern json_spirit::Value listmalleableviews(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value dumpmalleablekey(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value importmalleablekey(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value dumppem(const json_spirit::Array& params, bool fHelp);
+
+extern json_spirit::Value encryptdata(const json_spirit::Array& params, bool fHelp); // in rpccrypt.cpp
+extern json_spirit::Value decryptdata(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value encryptmessage(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value decryptmessage(const json_spirit::Array& params, bool fHelp);
 
 extern json_spirit::Value getrawtransaction(const json_spirit::Array& params, bool fHelp); // in rcprawtransaction.cpp
 extern json_spirit::Value listunspent(const json_spirit::Array& params, bool fHelp);

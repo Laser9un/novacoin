@@ -4,14 +4,8 @@
 #ifndef PPCOIN_KERNEL_H
 #define PPCOIN_KERNEL_H
 
-class CBlock;
-class CBlockIndex;
-class CTransaction;
-class COutPoint;
-class uint256;
-
-extern unsigned int nStakeMaxAge;
-extern unsigned int nStakeMinAge;
+#include "main.h"
+#include "wallet.h"
 
 // ChainDB upgrade time
 extern unsigned int nModifierUpgradeTime;

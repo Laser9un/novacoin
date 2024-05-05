@@ -3,13 +3,17 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include "main.h"
 #include "db.h"
-#include "txdb-leveldb.h"
+#include "txdb.h"
 #include "init.h"
 #include "miner.h"
 #include "kernel.h"
 #include "bitcoinrpc.h"
-#include "wallet.h"
+
+#include <boost/format.hpp>
+#include <boost/assign/list_of.hpp>
+#include <boost/iterator/counting_iterator.hpp>
 
 using namespace json_spirit;
 using namespace std;
@@ -80,7 +84,7 @@ Value scaninput(const Array& params, bool fHelp)
             "    days - time window, 90 days by default.\n"
         );
 
-    RPCTypeCheck(params, { obj_type });
+    RPCTypeCheck(params, boost::assign::list_of(obj_type));
 
     Object scanParams = params[0].get_obj();
 
@@ -130,13 +134,13 @@ Value scaninput(const Array& params, bool fHelp)
         if (inputs_v.type() == array_type)
         {
             Array inputs = inputs_v.get_array();
-            for (const Value &v_out : inputs)
+            BOOST_FOREACH(const Value &v_out, inputs)
             {
                 int nOut = v_out.get_int();
                 if (nOut < 0 || nOut > (int)tx.vout.size() - 1)
                 {
                     stringstream strErrorMsg;
-                    strErrorMsg << "Invalid parameter, input number " << to_string(nOut) << " is out of range";
+                    strErrorMsg << boost::format("Invalid parameter, input number %d is out of range") % nOut;
                     throw JSONRPCError(RPC_INVALID_PARAMETER, strErrorMsg.str());
                 }
 
@@ -149,7 +153,7 @@ Value scaninput(const Array& params, bool fHelp)
             if (nOut < 0 || nOut > (int)tx.vout.size() - 1)
             {
                 stringstream strErrorMsg;
-                strErrorMsg << "Invalid parameter, input number " << to_string(nOut) << " is out of range";
+                strErrorMsg << boost::format("Invalid parameter, input number %d is out of range") % nOut;
                 throw JSONRPCError(RPC_INVALID_PARAMETER, strErrorMsg.str());
             }
 
@@ -157,7 +161,7 @@ Value scaninput(const Array& params, bool fHelp)
         }
         else
         {
-            for (size_t i = 0; i != tx.vout.size(); ++i) vInputs.push_back(i);
+            vInputs = vector<int>(boost::counting_iterator<int>( 0 ), boost::counting_iterator<int>( tx.vout.size() ));
         }
 
         CTxDB txdb("r");
@@ -185,7 +189,7 @@ Value scaninput(const Array& params, bool fHelp)
         interval.second = interval.first + nDays * nOneDay;
 
         Array results;
-        for (const int &nOut : vInputs)
+        BOOST_FOREACH(const int &nOut, vInputs)
         {
             // Check for spent flag
             // It doesn't make sense to scan spent inputs.
@@ -205,7 +209,7 @@ Value scaninput(const Array& params, bool fHelp)
             std::vector<std::pair<uint256, uint32_t> > result;
             if (ScanKernelForward((unsigned char *)&itK[0], nBits, tx.nTime, tx.vout[nOut].nValue, interval, result))
             {
-                for (const auto &solution : result)
+                BOOST_FOREACH(const PAIRTYPE(uint256, uint32_t) solution, result)
                 {
                     Object item;
                     item.push_back(Pair("nout", nOut));
@@ -240,9 +244,9 @@ Value getworkex(const Array& params, bool fHelp)
     if (IsInitialBlockDownload())
         throw JSONRPCError(-10, "NovaCoin is downloading blocks...");
 
-    typedef map<uint256, pair<shared_ptr<CBlock>, CScript> > mapNewBlock_t;
+    typedef map<uint256, pair<CBlock*, CScript> > mapNewBlock_t;
     static mapNewBlock_t mapNewBlock;
-    static vector<std::shared_ptr<CBlock>> vNewBlock;
+    static vector<CBlock*> vNewBlock;
     static CReserveKey reservekey(pwalletMain);
 
     if (params.size() == 0)
@@ -251,7 +255,7 @@ Value getworkex(const Array& params, bool fHelp)
         static unsigned int nTransactionsUpdatedLast;
         static CBlockIndex* pindexPrev;
         static int64_t nStart;
-        static shared_ptr<CBlock> pblock;
+        static CBlock* pblock;
         if (pindexPrev != pindexBest ||
             (nTransactionsUpdated != nTransactionsUpdatedLast && GetTime() - nStart > 60))
         {
@@ -259,6 +263,8 @@ Value getworkex(const Array& params, bool fHelp)
             {
                 // Deallocate old blocks since they're obsolete now
                 mapNewBlock.clear();
+                BOOST_FOREACH(CBlock* pblock, vNewBlock)
+                    delete pblock;
                 vNewBlock.clear();
             }
             nTransactionsUpdatedLast = nTransactionsUpdated;
@@ -304,7 +310,7 @@ Value getworkex(const Array& params, bool fHelp)
 
         Array merkle_arr;
 
-        for (uint256 merkleh : merkle) {
+        BOOST_FOREACH(uint256 merkleh, merkle) {
             merkle_arr.push_back(HexStr(BEGIN(merkleh), END(merkleh)));
         }
 
@@ -334,7 +340,7 @@ Value getworkex(const Array& params, bool fHelp)
         // Get saved block
         if (!mapNewBlock.count(pdata->hashMerkleRoot))
             return false;
-        std::shared_ptr<CBlock> pblock = mapNewBlock[pdata->hashMerkleRoot].first;
+        CBlock* pblock = mapNewBlock[pdata->hashMerkleRoot].first;
 
         pblock->nTime = pdata->nTime;
         pblock->nNonce = pdata->nNonce;
@@ -369,9 +375,9 @@ Value getwork(const Array& params, bool fHelp)
     if (IsInitialBlockDownload())
         throw JSONRPCError(RPC_CLIENT_IN_INITIAL_DOWNLOAD, "NovaCoin is downloading blocks...");
 
-    typedef map<uint256, pair<shared_ptr<CBlock>, CScript> > mapNewBlock_t;
+    typedef map<uint256, pair<CBlock*, CScript> > mapNewBlock_t;
     static mapNewBlock_t mapNewBlock;    // FIXME: thread safety
-    static vector<shared_ptr<CBlock>> vNewBlock;
+    static vector<CBlock*> vNewBlock;
     static CReserveKey reservekey(pwalletMain);
 
     if (params.size() == 0)
@@ -380,7 +386,7 @@ Value getwork(const Array& params, bool fHelp)
         static unsigned int nTransactionsUpdatedLast;
         static CBlockIndex* pindexPrev;
         static int64_t nStart;
-        static shared_ptr<CBlock> pblock;
+        static CBlock* pblock;
         if (pindexPrev != pindexBest ||
             (nTransactionsUpdated != nTransactionsUpdatedLast && GetTime() - nStart > 60))
         {
@@ -388,6 +394,8 @@ Value getwork(const Array& params, bool fHelp)
             {
                 // Deallocate old blocks since they're obsolete now
                 mapNewBlock.clear();
+                BOOST_FOREACH(CBlock* pblock, vNewBlock)
+                    delete pblock;
                 vNewBlock.clear();
             }
 
@@ -450,7 +458,7 @@ Value getwork(const Array& params, bool fHelp)
         // Get saved block
         if (!mapNewBlock.count(pdata->hashMerkleRoot))
             return false;
-        std::shared_ptr<CBlock> pblock = mapNewBlock[pdata->hashMerkleRoot].first;
+        CBlock* pblock = mapNewBlock[pdata->hashMerkleRoot].first;
 
         pblock->nTime = pdata->nTime;
         pblock->nNonce = pdata->nNonce;
@@ -514,7 +522,7 @@ Value getblocktemplate(const Array& params, bool fHelp)
     static unsigned int nTransactionsUpdatedLast;
     static CBlockIndex* pindexPrev;
     static int64_t nStart;
-    static std::shared_ptr<CBlock> pblock;
+    static CBlock* pblock;
     if (pindexPrev != pindexBest ||
         (nTransactionsUpdated != nTransactionsUpdatedLast && GetTime() - nStart > 5))
     {
@@ -529,7 +537,8 @@ Value getblocktemplate(const Array& params, bool fHelp)
         // Create new block
         if(pblock)
         {
-            pblock.reset();
+            delete pblock;
+            pblock = NULL;
         }
         pblock = CreateNewBlock(pwalletMain);
         if (!pblock)
@@ -547,7 +556,7 @@ Value getblocktemplate(const Array& params, bool fHelp)
     map<uint256, int64_t> setTxIndex;
     int i = 0;
     CTxDB txdb("r");
-    for (CTransaction& tx : pblock->vtx)
+    BOOST_FOREACH (CTransaction& tx, pblock->vtx)
     {
         uint256 txHash = tx.GetHash();
         setTxIndex[txHash] = i++;
@@ -571,7 +580,7 @@ Value getblocktemplate(const Array& params, bool fHelp)
             entry.push_back(Pair("fee", (int64_t)(tx.GetValueIn(mapInputs) - tx.GetValueOut())));
 
             Array deps;
-            for (MapPrevTx::value_type& inp : mapInputs)
+            BOOST_FOREACH (MapPrevTx::value_type& inp, mapInputs)
             {
                 if (setTxIndex.count(inp.first))
                     deps.push_back(setTxIndex[inp.first]);

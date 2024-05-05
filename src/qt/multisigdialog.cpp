@@ -18,7 +18,12 @@
 #include "util.h"
 #include "wallet.h"
 #include "walletmodel.h"
+
+#ifdef USE_LEVELDB
 #include "txdb-leveldb.h"
+#else
+#include "txdb-bdb.h"
+#endif
 
 MultisigDialog::MultisigDialog(QWidget *parent) : QWidget(parent), ui(new Ui::MultisigDialog), model(0)
 {
@@ -349,7 +354,7 @@ void MultisigDialog::on_transaction_textChanged()
 
     // Fill input list
     int index = -1;
-    for (const CTxIn& txin : tx.vin)
+    BOOST_FOREACH(const CTxIn& txin, tx.vin)
     {
         uint256 prevoutHash = txin.prevout.hash;
         addInput();
@@ -364,7 +369,7 @@ void MultisigDialog::on_transaction_textChanged()
 
     // Fill output list
     index = -1;
-    for (const CTxOut& txout : tx.vout)
+    BOOST_FOREACH(const CTxOut& txout, tx.vout)
     {
         CScript scriptPubKey = txout.scriptPubKey;
         CTxDestination addr;
@@ -431,7 +436,7 @@ void MultisigDialog::on_signTransactionButton_clicked()
         tempTx.vin.push_back(mergedTx.vin[i]);
         tempTx.FetchInputs(txdb, unused, false, false, mapPrevTx, fInvalid);
 
-        for (const CTxIn& txin : tempTx.vin)
+        BOOST_FOREACH(const CTxIn& txin, tempTx.vin)
         {
             const uint256& prevHash = txin.prevout.hash;
             if(mapPrevTx.count(prevHash) && mapPrevTx[prevHash].second.vout.size() > txin.prevout.n)

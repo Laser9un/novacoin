@@ -4,12 +4,12 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-#include "txdb-leveldb.h"
+#include "txdb.h"
 #include "miner.h"
 #include "kernel.h"
 #include "kernel_worker.h"
-#include "wallet.h"
 
+using namespace std;
 
 //////////////////////////////////////////////////////////////////////////////
 //
@@ -61,7 +61,7 @@ class COrphan
 {
 public:
     CTransaction* ptx;
-    std::set<uint256> setDependsOn;
+    set<uint256> setDependsOn;
     double dPriority;
     double dFeePerKb;
 
@@ -78,7 +78,7 @@ uint64_t nLastBlockSize = 0;
 uint32_t nLastCoinStakeSearchInterval = 0;
  
 // We want to sort transactions by priority and fee, so:
-typedef std::tuple<double, double, CTransaction*> TxPriority;
+typedef boost::tuple<double, double, CTransaction*> TxPriority;
 class TxPriorityCompare
 {
     bool byFee;
@@ -88,28 +88,28 @@ public:
     {
         if (byFee)
         {
-            if (std::get<1>(a) == std::get<1>(b))
-                return std::get<0>(a) < std::get<0>(b);
-            return std::get<1>(a) < std::get<1>(b);
+            if (a.get<1>() == b.get<1>())
+                return a.get<0>() < b.get<0>();
+            return a.get<1>() < b.get<1>();
         }
         else
         {
-            if (std::get<0>(a) == std::get<0>(b))
-                return std::get<1>(a) < std::get<1>(b);
-            return std::get<0>(a) < std::get<0>(b);
+            if (a.get<0>() == b.get<0>())
+                return a.get<1>() < b.get<1>();
+            return a.get<0>() < b.get<0>();
         }
     }
 };
 
 // CreateNewBlock: create new block (without proof-of-work/with provided coinstake)
-std::shared_ptr<CBlock> CreateNewBlock(CWallet* pwallet, CTransaction *txCoinStake)
+CBlock* CreateNewBlock(CWallet* pwallet, CTransaction *txCoinStake)
 {
-    bool fProofOfStake = txCoinStake != nullptr;
+    bool fProofOfStake = txCoinStake != NULL;
 
     // Create new block
-    std::shared_ptr<CBlock> pblock(new CBlock());
+    auto_ptr<CBlock> pblock(new CBlock());
     if (!pblock.get())
-        return nullptr;
+        return NULL;
 
     // Create coinbase tx
     CTransaction txCoinBase;
@@ -159,11 +159,8 @@ std::shared_ptr<CBlock> CreateNewBlock(CWallet* pwallet, CTransaction *txCoinSta
     // 1-satoshi-fee transactions. It should be set above the real
     // cost to you of processing a transaction.
     int64_t nMinTxFee = MIN_TX_FEE;
-    if (mapArgs.count("-mintxfee")) {
-        bool fResult = ParseMoney(mapArgs["-mintxfee"], nMinTxFee);
-        if (!fResult) // Parse error
-            nMinTxFee = MIN_TX_FEE;
-    }
+    if (mapArgs.count("-mintxfee"))
+        ParseMoney(mapArgs["-mintxfee"], nMinTxFee);
 
     CBlockIndex* pindexPrev = pindexBest;
 
@@ -177,23 +174,23 @@ std::shared_ptr<CBlock> CreateNewBlock(CWallet* pwallet, CTransaction *txCoinSta
         CTxDB txdb("r");
 
         // Priority order to process transactions
-        std::list<COrphan> vOrphan; // list memory doesn't move
-        std::map<uint256, std::vector<COrphan*> > mapDependers;
+        list<COrphan> vOrphan; // list memory doesn't move
+        map<uint256, vector<COrphan*> > mapDependers;
 
         // This vector will be sorted into a priority queue:
-        std::vector<TxPriority> vecPriority;
+        vector<TxPriority> vecPriority;
         vecPriority.reserve(mempool.mapTx.size());
-        for (std::map<uint256, CTransaction>::iterator mi = mempool.mapTx.begin(); mi != mempool.mapTx.end(); ++mi)
+        for (map<uint256, CTransaction>::iterator mi = mempool.mapTx.begin(); mi != mempool.mapTx.end(); ++mi)
         {
             CTransaction& tx = (*mi).second;
             if (tx.IsCoinBase() || tx.IsCoinStake() || !tx.IsFinal())
                 continue;
 
-            COrphan* porphan = nullptr;
+            COrphan* porphan = NULL;
             double dPriority = 0;
             int64_t nTotalIn = 0;
             bool fMissingInputs = false;
-            for (const CTxIn& txin : tx.vin)
+            BOOST_FOREACH(const CTxIn& txin, tx.vin)
             {
                 // Read prev transaction
                 CTransaction txPrev;
@@ -252,7 +249,7 @@ std::shared_ptr<CBlock> CreateNewBlock(CWallet* pwallet, CTransaction *txCoinSta
         }
 
         // Collect transactions into block
-        std::map<uint256, CTxIndex> mapTestPool;
+        map<uint256, CTxIndex> mapTestPool;
         uint64_t nBlockSize = 1000;
         uint64_t nBlockTx = 0;
         int nBlockSigOps = 100;
@@ -264,9 +261,9 @@ std::shared_ptr<CBlock> CreateNewBlock(CWallet* pwallet, CTransaction *txCoinSta
         while (!vecPriority.empty())
         {
             // Take highest priority transaction off the priority queue:
-            double dPriority = std::get<0>(vecPriority.front());
-            double dFeePerKb = std::get<1>(vecPriority.front());
-            CTransaction& tx = *(std::get<2>(vecPriority.front()));
+            double dPriority = vecPriority.front().get<0>();
+            double dFeePerKb = vecPriority.front().get<1>();
+            CTransaction& tx = *(vecPriority.front().get<2>());
 
             std::pop_heap(vecPriority.begin(), vecPriority.end(), comparer);
             vecPriority.pop_back();
@@ -301,7 +298,7 @@ std::shared_ptr<CBlock> CreateNewBlock(CWallet* pwallet, CTransaction *txCoinSta
 
             // Connecting shouldn't fail due to dependency on other memory pool transactions
             // because we're already processing them in order of dependency
-            std::map<uint256, CTxIndex> mapTestPoolTmp(mapTestPool);
+            map<uint256, CTxIndex> mapTestPoolTmp(mapTestPool);
             MapPrevTx mapInputs;
             bool fInvalid;
             if (!tx.FetchInputs(txdb, mapTestPoolTmp, false, true, mapInputs, fInvalid))
@@ -340,7 +337,7 @@ std::shared_ptr<CBlock> CreateNewBlock(CWallet* pwallet, CTransaction *txCoinSta
             uint256 hash = tx.GetHash();
             if (mapDependers.count(hash))
             {
-                for (COrphan* porphan : mapDependers[hash])
+                BOOST_FOREACH(COrphan* porphan, mapDependers[hash])
                 {
                     if (!porphan->setDependsOn.empty())
                     {
@@ -360,7 +357,7 @@ std::shared_ptr<CBlock> CreateNewBlock(CWallet* pwallet, CTransaction *txCoinSta
 
         if (!fProofOfStake)
         {
-            pblock->vtx[0].vout[0].nValue = GetProofOfWorkReward(pblock->nBits) + nFees;
+            pblock->vtx[0].vout[0].nValue = GetProofOfWorkReward(pblock->nBits, nFees);
 
             if (fDebug)
                 printf("CreateNewBlock(): PoW reward %" PRIu64 "\n", pblock->vtx[0].vout[0].nValue);
@@ -373,18 +370,18 @@ std::shared_ptr<CBlock> CreateNewBlock(CWallet* pwallet, CTransaction *txCoinSta
         pblock->hashPrevBlock  = pindexPrev->GetBlockHash();
         if (!fProofOfStake)
         {
-            pblock->nTime          = std::max(pindexPrev->GetMedianTimePast()+1, pblock->GetMaxTransactionTime());
-            pblock->nTime          = std::max(pblock->GetBlockTime(), PastDrift(pindexPrev->GetBlockTime()));
+            pblock->nTime          = max(pindexPrev->GetMedianTimePast()+1, pblock->GetMaxTransactionTime());
+            pblock->nTime          = max(pblock->GetBlockTime(), PastDrift(pindexPrev->GetBlockTime()));
             pblock->UpdateTime(pindexPrev);
         }
         pblock->nNonce         = 0;
     }
 
-    return pblock;
+    return pblock.release();
 }
 
 
-void IncrementExtraNonce(std::shared_ptr<CBlock>& pblock, CBlockIndex* pindexPrev, unsigned int& nExtraNonce)
+void IncrementExtraNonce(CBlock* pblock, CBlockIndex* pindexPrev, unsigned int& nExtraNonce)
 {
     // Update nExtraNonce
     static uint256 hashPrevBlock;
@@ -403,7 +400,7 @@ void IncrementExtraNonce(std::shared_ptr<CBlock>& pblock, CBlockIndex* pindexPre
 }
 
 
-void FormatHashBuffers(const std::shared_ptr<CBlock>& pblock, char* pmidstate, char* pdata, char* phash1)
+void FormatHashBuffers(CBlock* pblock, char* pmidstate, char* pdata, char* phash1)
 {
     //
     // Pre-build hash buffers
@@ -449,7 +446,7 @@ void FormatHashBuffers(const std::shared_ptr<CBlock>& pblock, char* pmidstate, c
 }
 
 
-bool CheckWork(const std::shared_ptr<CBlock>& pblock, CWallet& wallet, CReserveKey& reservekey)
+bool CheckWork(CBlock* pblock, CWallet& wallet, CReserveKey& reservekey)
 {
     uint256 hashBlock = pblock->GetHash();
     uint256 hashTarget = CBigNum().SetCompact(pblock->nBits).getuint256();
@@ -481,14 +478,14 @@ bool CheckWork(const std::shared_ptr<CBlock>& pblock, CWallet& wallet, CReserveK
         }
 
         // Process this block the same as if we had received it from another node
-        if (!ProcessBlock(nullptr, pblock.get()))
+        if (!ProcessBlock(NULL, pblock))
             return error("CheckWork() : ProcessBlock, block not accepted");
     }
 
     return true;
 }
 
-bool CheckStake(const std::shared_ptr<CBlock>& pblock, CWallet& wallet)
+bool CheckStake(CBlock* pblock, CWallet& wallet)
 {
     uint256 proofHash = 0, hashTarget = 0;
     uint256 hashBlock = pblock->GetHash();
@@ -518,7 +515,7 @@ bool CheckStake(const std::shared_ptr<CBlock>& pblock, CWallet& wallet)
         }
 
         // Process this block the same as if we had received it from another node
-        if (!ProcessBlock(nullptr, pblock.get()))
+        if (!ProcessBlock(NULL, pblock))
             return error("CheckStake() : ProcessBlock, block not accepted");
     }
 
@@ -557,7 +554,7 @@ bool FillMap(CWallet *pwallet, uint32_t nUpperTime, MidstateMap &inputsMap)
 
         for(CoinsSet::const_iterator pcoin = setCoins.begin(); pcoin != setCoins.end(); pcoin++)
         {
-            std::pair<uint256, uint32_t> key = {pcoin->first->GetHash(), pcoin->second};
+            pair<uint256, uint32_t> key = make_pair(pcoin->first->GetHash(), pcoin->second);
 
             // Skip existent inputs
             if (inputsMap.find(key) != inputsMap.end())
@@ -565,7 +562,7 @@ bool FillMap(CWallet *pwallet, uint32_t nUpperTime, MidstateMap &inputsMap)
 
             // Trying to parse scriptPubKey
             txnouttype whichType;
-            std::vector<valtype> vSolutions;
+            vector<valtype> vSolutions;
             if (!Solver(pcoin->first->vout[pcoin->second].scriptPubKey, whichType, vSolutions))
                 continue;
 
@@ -596,7 +593,7 @@ bool FillMap(CWallet *pwallet, uint32_t nUpperTime, MidstateMap &inputsMap)
             ssKernel << block.nTime << (txindex.pos.nTxPos - txindex.pos.nBlockPos) << pcoin->first->nTime << pcoin->second;
 
             // (txid, vout.n) => (kernel, (tx.nTime, nAmount))
-            inputsMap[key] = {std::vector<unsigned char>(ssKernel.begin(), ssKernel.end()), {pcoin->first->nTime, pcoin->first->vout[pcoin->second].nValue}};
+            inputsMap[key] = make_pair(std::vector<unsigned char>(ssKernel.begin(), ssKernel.end()), make_pair(pcoin->first->nTime, pcoin->first->vout[pcoin->second].nValue));
         }
 
         nStakeInputsMapSize = inputsMap.size();
@@ -620,7 +617,7 @@ bool ScanMap(const MidstateMap &inputsMap, uint32_t nBits, MidstateMap::key_type
         std::pair<uint32_t, uint32_t> interval;
 
         interval.first = nSearchTime;
-        interval.second = nSearchTime - std::min(nSearchTime-nLastCoinStakeSearchTime, nMaxStakeSearchInterval);
+        interval.second = nSearchTime - min(nSearchTime-nLastCoinStakeSearchTime, nMaxStakeSearchInterval);
 
         // (txid, nout) => (kernel, (tx.nTime, nAmount))
         for(MidstateMap::const_iterator input = inputsMap.begin(); input != inputsMap.end(); input++)
@@ -720,7 +717,7 @@ void ThreadStakeMiner(void* parg)
                 // Create new coinstake transaction
                 if (!pwallet->CreateCoinStake(LuckyInput.first, LuckyInput.second, solution.second, nBits, txCoinStake, key))
                 {
-                    std::string strMessage = _("Warning: Unable to create coinstake transaction, see debug.log for the details. Mining thread has been stopped.");
+                    string strMessage = _("Warning: Unable to create coinstake transaction, see debug.log for the details. Mining thread has been stopped.");
                     strMiscWarning = strMessage;
                     printf("*** %s\n", strMessage.c_str());
 
@@ -728,10 +725,11 @@ void ThreadStakeMiner(void* parg)
                 }
 
                 // Now we have new coinstake, it's time to create the block ...
-                std::shared_ptr<CBlock> pblock = CreateNewBlock(pwallet, &txCoinStake);
+                CBlock* pblock;
+                pblock = CreateNewBlock(pwallet, &txCoinStake);
                 if (!pblock)
                 {
-                    std::string strMessage = _("Warning: Unable to allocate memory for the new block object. Mining thread has been stopped.");
+                    string strMessage = _("Warning: Unable to allocate memory for the new block object. Mining thread has been stopped.");
                     strMiscWarning = strMessage;
                     printf("*** %s\n", strMessage.c_str());
 
@@ -744,7 +742,7 @@ void ThreadStakeMiner(void* parg)
                 // ... and sign it
                 if (!key.Sign(pblock->GetHash(), pblock->vchBlockSig))
                 {
-                    std::string strMessage = _("Warning: Proof-of-Stake miner is unable to sign the block (locked wallet?). Mining thread has been stopped.");
+                    string strMessage = _("Warning: Proof-of-Stake miner is unable to sign the block (locked wallet?). Mining thread has been stopped.");
                     strMiscWarning = strMessage;
                     printf("*** %s\n", strMessage.c_str());
 
@@ -785,7 +783,7 @@ void ThreadStakeMiner(void* parg)
         PrintException(&e, "ThreadStakeMinter()");
     } catch (...) {
         vnThreadsRunning[THREAD_MINTER]--;
-        PrintException(nullptr, "ThreadStakeMinter()");
+        PrintException(NULL, "ThreadStakeMinter()");
     }
     printf("ThreadStakeMinter exiting, %d threads remaining\n", vnThreadsRunning[THREAD_MINTER]);
 }

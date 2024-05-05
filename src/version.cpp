@@ -11,7 +11,11 @@
 const std::string CLIENT_NAME("Satoshi");
 
 // Client version number
+#ifdef USE_LEVELDB
 #define CLIENT_VERSION_SUFFIX   "-leveldb"
+#else
+#define CLIENT_VERSION_SUFFIX   "-bdb"
+#endif
 
 // Compiler name
 #ifdef __INTEL_COMPILER
@@ -21,14 +25,14 @@ const std::string CLIENT_NAME("Satoshi");
 //code specific to MSVC compiler
 #define CL_NAME   "-msvc"
 #elif __clang__
-//code specific to clang compiler
+//code specific to clang compilers
 #define CL_NAME   "-clang"
-#elif __MINGW32__
-//code specific to mingw compiler
-#define CL_NAME   "-mingw"
 #elif __GNUC__
-//code specific to gnu compiler
+//code for GNU C compiler
 #define CL_NAME   "-gcc"
+#elif __MINGW32__
+//code specific to mingw compilers
+#define CL_NAME   "-mingw"
 #else
 #define CL_NAME   "-genericcl"
 //others
@@ -53,14 +57,11 @@ const std::string CLIENT_NAME("Satoshi");
 #    include "build.h"
 #endif
 
-// git will put "#define GIT_ARCHIVE 1" on the next line inside archives.
-#ifdef GIT_ARCHIVE
-#define GIT_COMMIT_DATE "$Format:%cD$"
-#endif
-
+// git will put "#define GIT_ARCHIVE 1" on the next line inside archives. 
 #define GIT_ARCHIVE 1
 #ifdef GIT_ARCHIVE
-#define GIT_COMMIT_ID "32a928e"
+#    define GIT_COMMIT_ID "32a928e"
+#    define GIT_COMMIT_DATE "$Format:%cD"
 #endif
 
 #define BUILD_DESC_FROM_COMMIT(maj,min,rev,commit) \

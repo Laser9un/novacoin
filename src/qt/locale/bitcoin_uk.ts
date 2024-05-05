@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE TS>
 <TS version="2.0" language="uk_UA">
+<defaultcodec>UTF-8</defaultcodec>
 <context>
     <name>AboutDialog</name>
     <message>
@@ -15,16 +16,16 @@
     </message>
     <message>
         <location filename="../forms/aboutdialog.ui" line="97"/>
-        <source>Copyright © 2009-2019 The Bitcoin developers
+        <source>Copyright © 2009-2016 The Bitcoin developers
 Copyright © 2011-2012 The PPCoin Developers
 Copyright © 2014 The Peerunity Developers
 Copyright © 2014 The EmerCoin Developers
-Copyright © 2012-2020 The NovaCoin developers</source>
-        <translation>© 2009-2019 Розробники Bitcoin
+Copyright © 2012-2016 The NovaCoin developers</source>
+        <translation>© 2009-2016 Розробники Bitcoin
 © 2011-2012 Розробники PPCoin
 © 2014 Розробники Peerunity
 © 2014 Розробники EmerCoin
-© 2012-2020 Розробники NovaCoin</translation>
+© 2012-2016 Розробники NovaCoin</translation>
     </message>
     <message>
         <location filename="../forms/aboutdialog.ui" line="114"/>
@@ -4101,12 +4102,12 @@ If the file does not exist, create it with owner-readable-only file permissions.
     <message>
         <location filename="../bitcoinstrings.cpp" line="107"/>
         <source>Importing blockchain data file.</source>
-        <translation>Імпорт з файлу даних ланцюжка блоків.</translation>
+        <translation>Імпорт з файлу даних ланцюжки блоків.</translation>
     </message>
     <message>
         <location filename="../bitcoinstrings.cpp" line="108"/>
         <source>Importing bootstrap blockchain data file.</source>
-        <translation>Початкове завантаження ланцюжка блоків.</translation>
+        <translation>Початкове завантаження ланцюжки блоків.</translation>
     </message>
     <message>
         <location filename="../bitcoinstrings.cpp" line="109"/>

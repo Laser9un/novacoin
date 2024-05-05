@@ -2,11 +2,10 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-#include "init.h"
+#include "init.h" // for pwalletMain
 #include "bitcoinrpc.h"
-#include "interface.h"
+#include "ui_interface.h"
 #include "base58.h"
-#include "wallet.h"
 
 #define printf OutputDebugStringF
 
@@ -227,6 +226,35 @@ Value dumpprivkey(const Array& params, bool fHelp)
     if (!pwalletMain->GetSecret(keyID, vchSecret, fCompressed))
         throw JSONRPCError(RPC_WALLET_ERROR, "Private key for address " + strAddress + " is not known");
     return CBitcoinSecret(vchSecret, fCompressed).ToString();
+}
+
+Value dumppem(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 3)
+        throw runtime_error(
+            "dumppem <novacoinaddress> <filename> <passphrase>\n"
+            "Dump the key pair corresponding to <novacoinaddress> and store it as encrypted PEM file."
+            + HelpRequiringPassphrase());
+
+    EnsureWalletIsUnlocked();
+
+    string strAddress = params[0].get_str();
+    SecureString strPassKey;
+    strPassKey.reserve(100);
+    strPassKey = params[2].get_str().c_str();
+
+    CBitcoinAddress address;
+    if (!address.SetString(strAddress))
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid NovaCoin address");
+    if (fWalletUnlockMintOnly)
+        throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Wallet is unlocked for minting only.");
+    CKeyID keyID;
+    if (!address.GetKeyID(keyID))
+        throw JSONRPCError(RPC_TYPE_ERROR, "Address does not refer to a key");
+    if (!pwalletMain->GetPEM(keyID, params[1].get_str(), strPassKey))
+        throw JSONRPCError(RPC_WALLET_ERROR, "Error dumping key pair to file");
+
+    return Value::null;
 }
 
 Value dumpwallet(const Array& params, bool fHelp)

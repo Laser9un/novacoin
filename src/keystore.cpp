@@ -266,7 +266,7 @@ bool CCryptoKeyStore::CreatePrivKey(const CPubKey &pubKeyVariant, const CPubKey 
                     return false;
 
                 CMalleableKey mKey = mi->first.GetMalleableKey(vchSecretH);
-                return mKey.CheckKeyVariant(R, pubKeyVariant, privKey);
+                return mKey.CheckKeyVariant(R, pubKeyVariant, privKey);;
             }
         }
 
@@ -349,7 +349,7 @@ bool CCryptoKeyStore::EncryptKeys(CKeyingMaterial& vMasterKeyIn)
             return false;
 
         fUseCrypto = true;
-        for (KeyMap::value_type& mKey : mapKeys)
+        BOOST_FOREACH(KeyMap::value_type& mKey, mapKeys)
         {
             CKey key;
             if (!key.SetSecret(mKey.second.first, mKey.second.second))
@@ -364,7 +364,7 @@ bool CCryptoKeyStore::EncryptKeys(CKeyingMaterial& vMasterKeyIn)
         }
         mapKeys.clear();
 
-        for (MalleableKeyMap::value_type& mKey : mapMalleableKeys)
+        BOOST_FOREACH(MalleableKeyMap::value_type& mKey, mapMalleableKeys)
         {
             const CPubKey vchPubKeyH = mKey.first.GetMalleablePubKey().GetH();
             std::vector<unsigned char> vchCryptedSecretH;

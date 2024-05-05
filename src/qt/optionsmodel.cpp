@@ -5,7 +5,6 @@
 #include "init.h"
 #include "walletdb.h"
 #include "guiutil.h"
-#include "wallet.h"
 
 OptionsModel::OptionsModel(QObject *parent) :
     QAbstractListModel(parent)
@@ -68,9 +67,9 @@ void OptionsModel::Init()
         if(fTestNet)
             settings.setValue("strThirdPartyTxUrls", "");
         else
-            settings.setValue("strThirdPartyTxUrls", "https://bitinfocharts.com/novacoin/tx/%s|https://explorer.novaco.in/tx/%s|https://novacoin.ru/explorer/tx/%s|https://prohashing.com/explorer/novacoin/%s");
+            settings.setValue("strThirdPartyTxUrls", "https://bitinfocharts.com/novacoin/tx/%s|https://coinplorer.com/NVC/Transactions/%s|https://explorer.novaco.in/tx/%s|https://bchain.info/NVC/tx/%s");
     }
-    strThirdPartyTxUrls = settings.value("strThirdPartyTxUrls", "https://bitinfocharts.com/novacoin/tx/%s|https://explorer.novaco.in/tx/%s|https://novacoin.ru/explorer/tx/%s|https://prohashing.com/explorer/novacoin/%s").toString();
+    strThirdPartyTxUrls = settings.value("strThirdPartyTxUrls", "https://bitinfocharts.com/novacoin/tx/%s|https://coinplorer.com/NVC/Transactions/%s|https://explorer.novaco.in/tx/%s|https://bchain.info/NVC/tx/%s").toString();
     fMinimizeToTray = settings.value("fMinimizeToTray", false).toBool();
     fMinimizeOnClose = settings.value("fMinimizeOnClose", false).toBool();
     fCoinControlFeatures = settings.value("fCoinControlFeatures", false).toBool();
@@ -104,6 +103,8 @@ void OptionsModel::Init()
         SoftSetArg("-peercollector", settings.value("externalSeeder").toString().toStdString());
     }
 
+    if (settings.contains("detachDB"))
+        SoftSetBoolArg("-detachdb", settings.value("detachDB").toBool());
     if (!language.isEmpty())
         SoftSetArg("-lang", language.toStdString());
 }
@@ -174,6 +175,8 @@ QVariant OptionsModel::data(const QModelIndex & index, int role) const
             return QVariant(bDisplayAddresses);
         case ThirdPartyTxUrls:
             return QVariant(strThirdPartyTxUrls);
+        case DetachDatabases:
+            return QVariant(bitdb.GetDetach());
         case Language:
             return settings.value("language", "");
         case CoinControlFeatures:
@@ -289,6 +292,12 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
         case DisplayAddresses:
             bDisplayAddresses = value.toBool();
             settings.setValue("bDisplayAddresses", bDisplayAddresses);
+            break;
+        case DetachDatabases: {
+            bool fDetachDB = value.toBool();
+            bitdb.SetDetach(fDetachDB);
+            settings.setValue("detachDB", fDetachDB);
+            }
             break;
         case ThirdPartyTxUrls:
             if (strThirdPartyTxUrls != value.toString()) {

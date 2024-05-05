@@ -11,11 +11,11 @@
 #include "allocators.h"
 #include "serialize.h"
 #include "uint256.h"
+#include "hash.h"
 #include "bignum.h"
+#include "ies.h"
 
 #include <openssl/ec.h> // for EC_KEY definition
-#include <openssl/obj_mac.h>
-
 
 // secp160k1
 // const unsigned int PRIVATE_KEY_SIZE = 192;
@@ -50,16 +50,16 @@ public:
 class CKeyID : public uint160
 {
 public:
-    CKeyID();
-    CKeyID(const uint160 &in);
+    CKeyID() : uint160(0) { }
+    CKeyID(const uint160 &in) : uint160(in) { }
 };
 
 /** A reference to a CScript: the Hash160 of its serialization (see script.h) */
 class CScriptID : public uint160
 {
 public:
-    CScriptID();
-    CScriptID(const uint160 &in);
+    CScriptID() : uint160(0) { }
+    CScriptID(const uint160 &in) : uint160(in) { }
 };
 
 /** An encapsulated OpenSSL Elliptic Curve key (public) */
@@ -160,8 +160,15 @@ public:
         }
     }
 
-    CKeyID GetID() const;
-    uint256 GetHash() const;
+    CKeyID GetID() const
+    {
+        return CKeyID(Hash160(vbytes, vbytes + size()));
+    }
+
+    uint256 GetHash() const
+    {
+        return Hash(vbytes, vbytes + size());
+    }
 
     /*
      * Check syntactic correctness.
@@ -199,6 +206,9 @@ public:
 
     // Reserialize to DER
     static bool ReserealizeSignature(std::vector<unsigned char>& vchSig);
+
+    // Encrypt data
+    void EncryptData(const std::vector<unsigned char>& data, std::vector<unsigned char>& encrypted);
 };
 
 // secure_allocator is defined in allocators.h
@@ -237,6 +247,7 @@ public:
     CSecret GetSecret() const;
     CPrivKey GetPrivKey() const;
     CPubKey GetPubKey() const;
+    bool WritePEM(BIO *streamObj, const SecureString &strPassKey) const;
 
     bool Sign(uint256 hash, std::vector<unsigned char>& vchSig);
 
@@ -250,6 +261,9 @@ public:
 
     // Check whether an element of a signature (r or s) is valid.
     static bool CheckSignatureElement(const unsigned char *vch, int len, bool half);
+
+    // Decrypt data
+    void DecryptData(const std::vector<unsigned char>& encrypted, std::vector<unsigned char>& data);
 };
 
 class CPoint
@@ -416,7 +430,7 @@ public:
     CMalleableKey GetMalleableKey(const CSecret &vchSecretH) const { return CMalleableKey(vchSecretL, vchSecretH); }
     bool CheckKeyVariant(const CPubKey &R, const CPubKey &vchPubKeyVariant) const;
 
-    bool operator <(const CMalleableKeyView& kv) const;
+    bool operator <(const CMalleableKeyView& kv) const { return vchPubKeyH.GetID() < kv.vchPubKeyH.GetID(); }
 };
 
 #endif

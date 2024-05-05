@@ -4,6 +4,8 @@
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <netinet/in.h>
+#include <arpa/inet.h>
+#include <netdb.h>
 #endif
 #ifndef WIN32
 #include <unistd.h>
@@ -11,7 +13,8 @@
 
 #include "netbase.h"
 #include "net.h"
-#include "interface.h"
+//#include "util.h"
+#include "ui_interface.h"
 
 extern int GetRandInt(int nMax);
 
@@ -77,12 +80,9 @@ struct pkt {
   uint8_t  mac[5 * sizeof(uint32_t)]; /* mac */
 };
 
-const int nServersCount = 154;
+const int nServersCount = 162;
 
-std::string NtpServers[nServersCount] = {
-    // Apple
-    "time.apple.com",
-
+std::string NtpServers[162] = {
     // Microsoft
     "time.windows.com",
 
@@ -96,6 +96,12 @@ std::string NtpServers[nServersCount] = {
     "clock.sjc.he.net",
     "clock.nyc.he.net",
 
+    // SixXS
+    "ntp.sixxs.net",
+    "ntp.eu.sixxs.net",
+    "ntp.us.sixxs.net",
+    "ntp.ap.sixxs.net",
+
     // Russian Federation
     "ntp.karelia.pro",
     "ntp.alpet.me",
@@ -108,11 +114,12 @@ std::string NtpServers[nServersCount] = {
     "ntp3.stratum2.ru",
     "ntp4.stratum2.ru",
     "ntp5.stratum2.ru",
+    "ntp6.stratum2.ru",
+    "ntp7.stratum2.ru",
     "ntp1.stratum1.ru",
     "ntp2.stratum1.ru",
     "ntp3.stratum1.ru",
     "ntp4.stratum1.ru",
-    "ntp5.stratum1.ru",
     "ntp1.vniiftri.ru",
     "ntp2.vniiftri.ru",
     "ntp3.vniiftri.ru",
@@ -136,18 +143,14 @@ std::string NtpServers[nServersCount] = {
     "sundial.columbia.edu",
     "ntp-1.ece.cmu.edu",
     "ntp-2.ece.cmu.edu",
-    "ntp-3.ece.cmu.edu",
     "ntp1.cs.wisc.edu",
     "ntp2.cs.wisc.edu",
     "ntp3.cs.wisc.edu",
-    "ntp4.cs.wisc.edu",
     "ntp-01.caltech.edu",
     "ntp-02.caltech.edu",
     "ntp-03.caltech.edu",
     "ntp-04.caltech.edu",
-    "nist0-pa.ustiming.org",
     "nist1-pa.ustiming.org",
-    "nist2-pa.ustiming.org",
     "time.nist.gov",
     "time-a.nist.gov",
     "time-b.nist.gov",
@@ -156,14 +159,19 @@ std::string NtpServers[nServersCount] = {
     "time-nw.nist.gov",
     "nist1-macon.macon.ga.us",
     "nist.netservicesgroup.com",
+    "nisttime.carsoncity.k12.mi.us",
+    "nist1-lnk.binary.net",
     "wwv.nist.gov",
     "time-a.timefreq.bldrdoc.gov",
     "time-b.timefreq.bldrdoc.gov",
     "time-c.timefreq.bldrdoc.gov",
     "utcnist.colorado.edu",
     "utcnist2.colorado.edu",
+    "ntp-nist.ldsbc.net",
     "nist1-lv.ustiming.org",
     "time-nw.nist.gov",
+    "nist-time-server.eoni.com",
+    "nist-time-server.eoni.com",
     "ntp1.bu.edu",
     "ntp2.bu.edu",
     "ntp3.bu.edu",
@@ -171,6 +179,7 @@ std::string NtpServers[nServersCount] = {
     "1.us.pool.ntp.org",
     "2.us.pool.ntp.org",
     "3.us.pool.ntp.org",
+    "wwv.otc.psu.edu",
     "otc1.psu.edu",
     "otc2.psu.edu",
     "now.okstate.edu",
@@ -234,6 +243,8 @@ std::string NtpServers[nServersCount] = {
     "time.nrc.ca",
     "timelord.uregina.ca",
     "tock.utoronto.ca",
+    "www1.cmc.ec.gc.ca",
+    "www2.cmc.ec.gc.ca",
     "0.ca.pool.ntp.org",
     "1.ca.pool.ntp.org",
     "2.ca.pool.ntp.org",
@@ -459,7 +470,7 @@ void ThreadNtpSamples(void* parg) {
             // Trying to get new offset sample from trusted NTP server.
             int64_t nClockOffset = NtpGetTime(strTrustedUpstream) - GetTime();
 
-            if (abs(nClockOffset) < nMaxOffset) {
+            if (abs64(nClockOffset) < nMaxOffset) {
                 // Everything seems right, remember new trusted offset.
                 printf("ThreadNtpSamples: new offset sample from %s, offset=%" PRId64 ".\n", strTrustedUpstream.c_str(), nClockOffset);
                 nNtpOffset = nClockOffset;
@@ -484,7 +495,7 @@ void ThreadNtpSamples(void* parg) {
                 CNetAddr ip;
                 int64_t nClockOffset = NtpGetTime(ip) - GetTime();
 
-                if (abs(nClockOffset) < nMaxOffset) { // Skip the deliberately wrong timestamps
+                if (abs64(nClockOffset) < nMaxOffset) { // Skip the deliberately wrong timestamps
                     printf("ThreadNtpSamples: new offset sample from %s, offset=%" PRId64 ".\n", ip.ToString().c_str(), nClockOffset);
                     vTimeOffsets.input(nClockOffset);
                 }
@@ -503,7 +514,7 @@ void ThreadNtpSamples(void* parg) {
             }
         }
 
-        if (GetNodesOffset() == INT_MAX && abs(nNtpOffset) > 40 * 60)
+        if (GetNodesOffset() == INT_MAX && abs64(nNtpOffset) > 40 * 60)
         {
             // If there is not enough node offsets data and NTP time offset is greater than 40 minutes then give a warning.
             std::string strMessage = _("Warning: Please check that your computer's date and time are correct! If your clock is wrong NovaCoin will not work properly.");

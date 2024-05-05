@@ -6,7 +6,6 @@
 #include "irc.h"
 #include "base58.h"
 #include "net.h"
-#include "random.h"
 
 using namespace std;
 

@@ -2,8 +2,11 @@
 // Copyright (c) 2009-2012 The Bitcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
+#include "ui_interface.h"
+#include "init.h"
+#include "bitcoinrpc.h"
 
-#include "interface.h"
+#include <string>
 
 static int noui_ThreadSafeMessageBox(const std::string& message, const std::string& caption, int style)
 {

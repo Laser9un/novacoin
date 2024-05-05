@@ -9,7 +9,7 @@
 #include "bitcoinunits.h"
 
 #include "wallet.h"
-#include "interface.h"
+#include "ui_interface.h"
 
 #include <QLocale>
 #include <QList>

@@ -13,8 +13,6 @@
 #include <QKeyEvent>
 #include <QUrl>
 #include <QScrollBar>
-#include <QStringList>
-#include <QAbstractItemView>
 
 #include <openssl/crypto.h>
 #include <db_cxx.h>
@@ -245,14 +243,6 @@ bool RPCConsole::eventFilter(QObject* obj, QEvent *event)
                 return true;
             }
             break;
-        case Qt::Key_Return:
-        case Qt::Key_Enter:
-            // forward these events to lineEdit
-            if(obj == (QObject*)autoCompleter->popup()) {
-                QApplication::postEvent(ui->lineEdit, new QKeyEvent(*keyevt));
-                return true;
-            }
-            break;
         default:
             // Typing in messages widget brings focus to line edit, and redirects key there
             // Exclude most combinations and keys that emit no text, except paste shortcuts
@@ -263,7 +253,6 @@ bool RPCConsole::eventFilter(QObject* obj, QEvent *event)
             {
                 ui->lineEdit->setFocus();
                 QApplication::postEvent(ui->lineEdit, new QKeyEvent(*keyevt));
-                autoCompleter->popup()->hide();
                 return true;
             }
         }
@@ -293,24 +282,6 @@ void RPCConsole::setClientModel(ClientModel *model)
         ui->isTestNet->setChecked(model->isTestNet());
 
         setNumBlocks(model->getNumBlocks(), model->getNumBlocksOfPeers());
-
-        //Setup autocomplete and attach it
-        QStringList wordList;
-        std::vector<std::string> commandList = tableRPC.listCommands();
-        for (size_t i = 0; i < commandList.size(); ++i)
-        {
-            wordList << commandList[i].c_str();
-            wordList << ("help " + commandList[i]).c_str();
-        }
-
-        wordList.sort();
-        autoCompleter = new QCompleter(wordList, this);
-        autoCompleter->setModelSorting(QCompleter::CaseSensitivelySortedModel);
-        // ui->lineEdit is initially disabled because running commands is only
-        // possible from now on.
-        ui->lineEdit->setEnabled(true);
-        ui->lineEdit->setCompleter(autoCompleter);
-        autoCompleter->popup()->installEventFilter(this);
     }
 }
 
@@ -328,8 +299,6 @@ static QString categoryClass(int category)
 void RPCConsole::clear()
 {
     ui->messagesWidget->clear();
-    history.clear();
-    historyPtr = 0;
     ui->lineEdit->clear();
     ui->lineEdit->setFocus();
 

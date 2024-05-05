@@ -2,19 +2,17 @@
 // Copyright (c) 2009-2012 The Bitcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
-#include "init.h"
-#include "wallet.h"
-#include "base58.h"
-#include "txdb-leveldb.h"
+#include "txdb.h"
 #include "walletdb.h"
 #include "bitcoinrpc.h"
 #include "net.h"
-#include "random.h"
+#include "init.h"
 #include "util.h"
 #include "ipcollector.h"
-#include "interface.h"
+#include "ui_interface.h"
 #include "checkpoints.h"
-
+#include <boost/format.hpp>
+#include <boost/filesystem.hpp>
 #include <boost/filesystem/fstream.hpp>
 #include <boost/filesystem/convenience.hpp>
 #include <boost/interprocess/sync/file_lock.hpp>
@@ -25,6 +23,9 @@
 #include <signal.h>
 #endif
 
+
+using namespace std;
+using namespace boost;
 
 CWallet* pwalletMain;
 CClientUIInterface uiInterface;
@@ -88,7 +89,6 @@ void Shutdown(void* parg)
         nTransactionsUpdated++;
 //        CTxDB().Close();
         bitdb.Flush(false);
-        StopRPCServer();
         StopNode();
         bitdb.Flush(true);
         boost::filesystem::remove(GetPidFile());
@@ -231,7 +231,7 @@ bool static Bind(const CService &addr, bool fError = true) {
 // Core-specific options shared between UI and daemon
 std::string HelpMessage()
 {
-    std::string strUsage = _("Options:") + "\n" +
+    string strUsage = _("Options:") + "\n" +
         "  -?                     " + _("This help message") + "\n" +
         "  -conf=<file>           " + _("Specify configuration file (default: novacoin.conf)") + "\n" +
         "  -pid=<file>            " + _("Specify pid file (default: novacoind.pid)") + "\n" +
@@ -262,13 +262,14 @@ std::string HelpMessage()
         "  -bantime=<n>           " + _("Number of seconds to keep misbehaving peers from reconnecting (default: 86400)") + "\n" +
         "  -maxreceivebuffer=<n>  " + _("Maximum per-connection receive buffer, <n>*1000 bytes (default: 5000)") + "\n" +
         "  -maxsendbuffer=<n>     " + _("Maximum per-connection send buffer, <n>*1000 bytes (default: 1000)") + "\n" +
+        "  -detachdb              " + _("Detach block and address databases. Increases shutdown time (default: 0)") + "\n" +
 
 #ifdef DB_LOG_IN_MEMORY
         "  -memorylog             " + _("Use in-memory logging for block index database (default: 1)") + "\n" +
 #endif
 
         "  -paytxfee=<amt>        " + _("Fee per KB to add to transactions you send") + "\n" +
-        "  -mininput=<amt>        " + (_("When creating transactions, ignore inputs with value less than this (default: ") + FormatMoney(MIN_TXOUT_AMOUNT) + ")") + "\n" +
+        "  -mininput=<amt>        " + str(boost::format(_("When creating transactions, ignore inputs with value less than this (default: %s)")) % FormatMoney(MIN_TXOUT_AMOUNT)) + "\n" +
 #ifdef QT_GUI
         "  -server                " + _("Accept command line and JSON-RPC commands") + "\n" +
 #endif
@@ -306,7 +307,13 @@ std::string HelpMessage()
         "\n" + _("Block creation options:") + "\n" +
         "  -blockminsize=<n>      "   + _("Set minimum block size in bytes (default: 0)") + "\n" +
         "  -blockmaxsize=<n>      "   + _("Set maximum block size in bytes (default: 250000)") + "\n" +
-        "  -blockprioritysize=<n> "   + _("Set maximum size of high-priority/low-fee transactions in bytes (default: 27000)") + "\n";
+        "  -blockprioritysize=<n> "   + _("Set maximum size of high-priority/low-fee transactions in bytes (default: 27000)") + "\n" +
+
+        "\n" + _("SSL options: (see the Bitcoin Wiki for SSL setup instructions)") + "\n" +
+        "  -rpcssl                                  " + _("Use OpenSSL (https) for JSON-RPC connections") + "\n" +
+        "  -rpcsslcertificatechainfile=<file.cert>  " + _("Server certificate file (default: server.cert)") + "\n" +
+        "  -rpcsslprivatekeyfile=<file.pem>         " + _("Server private key (default: server.pem)") + "\n" +
+        "  -rpcsslciphers=<ciphers>                 " + _("Acceptable ciphers (default: TLSv1+HIGH:!SSLv2:!aNULL:!eNULL:!AH:!3DES:@STRENGTH)") + "\n";
 
     return strUsage;
 }
@@ -373,7 +380,7 @@ bool AppInit2()
     fUseMemoryLog = GetBoolArg("-memorylog", true);
 
     // Ping and address broadcast intervals
-    nPingInterval = std::max<int64_t>(10 * 60, GetArg("-keepalive", 30 * 60));
+    nPingInterval = max<int64_t>(10 * 60, GetArg("-keepalive", 30 * 60));
 
     CheckpointsMode = Checkpoints::STRICT;
     std::string strCpMode = GetArg("-cppolicy", "strict");
@@ -451,6 +458,8 @@ bool AppInit2()
         fDebugNet = true;
     else
         fDebugNet = GetBoolArg("-debugnet");
+
+    bitdb.SetDetach(GetBoolArg("-detachdb", false));
 
 #if !defined(WIN32) && !defined(QT_GUI)
     fDaemon = GetBoolArg("-daemon");
@@ -564,7 +573,7 @@ bool AppInit2()
 
     if (!bitdb.Open(GetDataDir()))
     {
-        std::string msg = strprintf(_("Error initializing database environment %s!"
+        string msg = strprintf(_("Error initializing database environment %s!"
                                  " To recover, BACKUP THAT DIRECTORY, then remove"
                                  " everything from it except for wallet.dat."), strDataDir.c_str());
         return InitError(msg);
@@ -577,12 +586,12 @@ bool AppInit2()
             return false;
     }
 
-    if (boost::filesystem::exists(GetDataDir() / strWalletFileName))
+    if (filesystem::exists(GetDataDir() / strWalletFileName))
     {
         CDBEnv::VerifyResult r = bitdb.Verify(strWalletFileName, CWalletDB::Recover);
         if (r == CDBEnv::RECOVER_OK)
         {
-            std::string msg = strprintf(_("Warning: wallet.dat corrupt, data salvaged!"
+            string msg = strprintf(_("Warning: wallet.dat corrupt, data salvaged!"
                                      " Original wallet.dat saved as wallet.{timestamp}.bak in %s; if"
                                      " your balance or transactions are incorrect you should"
                                      " restore from a backup."), strDataDir.c_str());
@@ -601,7 +610,7 @@ bool AppInit2()
 
     if (mapArgs.count("-onlynet")) {
         std::set<enum Network> nets;
-        for (std::string snet : mapMultiArgs["-onlynet"]) {
+        BOOST_FOREACH(std::string snet, mapMultiArgs["-onlynet"]) {
             enum Network net = ParseNetwork(snet);
             if (net == NET_UNROUTABLE)
                 return InitError(strprintf(_("Unknown network specified in -onlynet: '%s'"), snet.c_str()));
@@ -671,7 +680,7 @@ bool AppInit2()
     {
         std::string strError;
         if (mapArgs.count("-bind")) {
-            for(std::string strBind : mapMultiArgs["-bind"]) {
+            BOOST_FOREACH(std::string strBind, mapMultiArgs["-bind"]) {
                 CService addrBind;
                 if (!Lookup(strBind.c_str(), addrBind, GetListenPort(), false))
                     return InitError(strprintf(_("Cannot resolve -bind address: '%s'"), strBind.c_str()));
@@ -709,7 +718,7 @@ bool AppInit2()
 
     if (mapArgs.count("-externalip"))
     {
-        for (std::string strAddr : mapMultiArgs["-externalip"]) {
+        BOOST_FOREACH(string strAddr, mapMultiArgs["-externalip"]) {
             CService addrLocal(strAddr, GetListenPort(), fNameLookup);
             if (!addrLocal.IsValid())
                 return InitError(strprintf(_("Cannot resolve -externalip address: '%s'"), strAddr.c_str()));
@@ -732,14 +741,14 @@ bool AppInit2()
             InitError(_("Unable to sign checkpoint, wrong checkpointkey?\n"));
     }
 
-    for (std::string strDest : mapMultiArgs["-seednode"])
+    BOOST_FOREACH(string strDest, mapMultiArgs["-seednode"])
         AddOneShot(strDest);
 
     // ********************************************************* Step 7: load blockchain
 
     if (!bitdb.Open(GetDataDir()))
     {
-        std::string msg = strprintf(_("Error initializing database environment %s!"
+        string msg = strprintf(_("Error initializing database environment %s!"
                                  " To recover, BACKUP THAT DIRECTORY, then remove"
                                  " everything from it except for wallet.dat."), strDataDir.c_str());
         return InitError(msg);
@@ -801,9 +810,9 @@ bool AppInit2()
 
     if (mapArgs.count("-printblock"))
     {
-        std::string strMatch = mapArgs["-printblock"];
+        string strMatch = mapArgs["-printblock"];
         int nFound = 0;
-        for (auto mi = mapBlockIndex.begin(); mi != mapBlockIndex.end(); ++mi)
+        for (map<uint256, CBlockIndex*>::iterator mi = mapBlockIndex.begin(); mi != mapBlockIndex.end(); ++mi)
         {
             uint256 hash = (*mi).first;
             if (strncmp(hash.ToString().c_str(), strMatch.c_str(), strMatch.size()) == 0)
@@ -849,7 +858,7 @@ bool AppInit2()
             strErrors << _("Error loading wallet.dat: Wallet corrupted") << "\n";
         else if (nLoadWalletRet == DB_NONCRITICAL_ERROR)
         {
-            std::string msg(_("Warning: error reading wallet.dat! All keys read correctly, but transaction data"
+            string msg(_("Warning: error reading wallet.dat! All keys read correctly, but transaction data"
                          " or address book entries might be missing or incorrect."));
             uiInterface.ThreadSafeMessageBox(msg, _("NovaCoin"), CClientUIInterface::OK | CClientUIInterface::ICON_EXCLAMATION | CClientUIInterface::MODAL);
         }
@@ -931,7 +940,7 @@ bool AppInit2()
     {
         uiInterface.InitMessage(_("Importing blockchain data file."));
 
-        for (std::string strFile : mapMultiArgs["-loadblock"])
+        BOOST_FOREACH(string strFile, mapMultiArgs["-loadblock"])
         {
             FILE *file = fopen(strFile.c_str(), "rb");
             if (file)
@@ -940,13 +949,13 @@ bool AppInit2()
         StartShutdown();
     }
 
-    boost::filesystem::path pathBootstrap = GetDataDir() / "bootstrap.dat";
-    if (boost::filesystem::exists(pathBootstrap)) {
+    filesystem::path pathBootstrap = GetDataDir() / "bootstrap.dat";
+    if (filesystem::exists(pathBootstrap)) {
         uiInterface.InitMessage(_("Importing bootstrap blockchain data file."));
 
         FILE *file = fopen(pathBootstrap.string().c_str(), "rb");
         if (file) {
-            boost::filesystem::path pathBootstrapOld = GetDataDir() / "bootstrap.dat.old";
+            filesystem::path pathBootstrapOld = GetDataDir() / "bootstrap.dat.old";
             LoadExternalBlockFile(file);
             RenameOver(pathBootstrap, pathBootstrapOld);
         }
@@ -959,7 +968,6 @@ bool AppInit2()
     nStart = GetTimeMillis();
 
     {
-        CAddrDB::SetMessageStart(pchMessageStart);
         CAddrDB adb;
         if (!adb.Read(addrman))
             printf("Invalid or missing peers.dat; recreating\n");
@@ -986,7 +994,7 @@ bool AppInit2()
         InitError(_("Error: could not start node"));
 
     if (fServer)
-        StartRPCServer();
+        NewThread(ThreadRPCServer, NULL);
 
     // ********************************************************* Step 13: IP collection thread
     strCollectorCommand = GetArg("-peercollector", "");

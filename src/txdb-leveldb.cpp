@@ -3,10 +3,7 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file license.txt or http://www.opensource.org/licenses/mit-license.php.
 
-#include "txdb-leveldb.h"
-#include "kernel.h"
-#include "checkpoints.h"
-#include "main.h"
+#include <map>
 
 #include <boost/version.hpp>
 #include <boost/filesystem.hpp>
@@ -17,7 +14,14 @@
 #include <leveldb/filter_policy.h>
 #include <memenv/memenv.h>
 
+#include "kernel.h"
+#include "checkpoints.h"
+#include "txdb.h"
+#include "util.h"
+#include "main.h"
+
 using namespace std;
+using namespace boost;
 
 leveldb::DB *txdb; // global pointer for LevelDB object instance
 
@@ -31,27 +35,27 @@ static leveldb::Options GetOptions() {
 
 void init_blockindex(leveldb::Options& options, bool fRemoveOld = false) {
     // First time init.
-    boost::filesystem::path directory = GetDataDir() / "txleveldb";
+    filesystem::path directory = GetDataDir() / "txleveldb";
 
     if (fRemoveOld) {
-        boost::filesystem::remove_all(directory); // remove directory
+        filesystem::remove_all(directory); // remove directory
         unsigned int nFile = 1;
 
         for ( ; ; )
         {
-            boost::filesystem::path strBlockFile = GetDataDir() / strprintf("blk%04u.dat", nFile);
+            filesystem::path strBlockFile = GetDataDir() / strprintf("blk%04u.dat", nFile);
 
             // Break if no such file
-            if( !boost::filesystem::exists( strBlockFile ) )
+            if( !filesystem::exists( strBlockFile ) )
                 break;
 
-            boost::filesystem::remove(strBlockFile);
+            filesystem::remove(strBlockFile);
 
             nFile++;
         }
     }
 
-    boost::filesystem::create_directory(directory);
+    filesystem::create_directory(directory);
     printf("Opening LevelDB in %s\n", directory.string().c_str());
     leveldb::Status status = leveldb::DB::Open(options, directory.string(), &txdb);
     if (!status.ok()) {
@@ -60,7 +64,7 @@ void init_blockindex(leveldb::Options& options, bool fRemoveOld = false) {
 }
 
 // CDB subclasses are created and destroyed VERY OFTEN. That's why
-// we shouldn't treat this as free operations.
+// we shouldn't treat this as a free operations.
 CTxDB::CTxDB(const char* pszMode)
 {
     assert(pszMode);
@@ -91,10 +95,10 @@ CTxDB::CTxDB(const char* pszMode)
             printf("Required index version is %d, removing old database\n", DATABASE_VERSION);
 
             // Leveldb instance destruction
-            delete activeBatch;
-            activeBatch = NULL;
             delete txdb;
             txdb = pdb = NULL;
+            delete activeBatch;
+            activeBatch = NULL;
 
             init_blockindex(options, true); // Remove directory and create new database
             pdb = txdb;
@@ -406,13 +410,13 @@ bool CTxDB::LoadBlockIndex()
     // Calculate nChainTrust
     vector<pair<int, CBlockIndex*> > vSortedByHeight;
     vSortedByHeight.reserve(mapBlockIndex.size());
-    for (const auto& item : mapBlockIndex)
+    BOOST_FOREACH(const PAIRTYPE(uint256, CBlockIndex*)& item, mapBlockIndex)
     {
         CBlockIndex* pindex = item.second;
         vSortedByHeight.push_back(make_pair(pindex->nHeight, pindex));
     }
     sort(vSortedByHeight.begin(), vSortedByHeight.end());
-    for (const auto& item : vSortedByHeight)
+    BOOST_FOREACH(const PAIRTYPE(int, CBlockIndex*)& item, vSortedByHeight)
     {
         CBlockIndex* pindex = item.second;
         pindex->nChainTrust = (pindex->pprev ? pindex->pprev->nChainTrust : 0) + pindex->GetBlockTrust();
@@ -478,7 +482,7 @@ bool CTxDB::LoadBlockIndex()
         {
             pair<unsigned int, unsigned int> pos = make_pair(pindex->nFile, pindex->nBlockPos);
             mapBlockPos[pos] = pindex;
-            for (const CTransaction &tx : block.vtx)
+            BOOST_FOREACH(const CTransaction &tx, block.vtx)
             {
                 uint256 hashTx = tx.GetHash();
                 CTxIndex txindex;
@@ -505,7 +509,7 @@ bool CTxDB::LoadBlockIndex()
                     unsigned int nOutput = 0;
                     if (nCheckLevel>3)
                     {
-                        for (const CDiskTxPos &txpos : txindex.vSpent)
+                        BOOST_FOREACH(const CDiskTxPos &txpos, txindex.vSpent)
                         {
                             if (!txpos.IsNull())
                             {
@@ -532,7 +536,7 @@ bool CTxDB::LoadBlockIndex()
                                     else
                                     {
                                         bool fFound = false;
-                                        for (const CTxIn &txin : txSpend.vin)
+                                        BOOST_FOREACH(const CTxIn &txin, txSpend.vin)
                                             if (txin.prevout.hash == hashTx && txin.prevout.n == nOutput)
                                                 fFound = true;
                                         if (!fFound)
@@ -550,7 +554,7 @@ bool CTxDB::LoadBlockIndex()
                 // check level 5: check whether all prevouts are marked spent
                 if (nCheckLevel>4)
                 {
-                     for (const CTxIn &txin : tx.vin)
+                     BOOST_FOREACH(const CTxIn &txin, tx.vin)
                      {
                           CTxIndex txindex;
                           if (ReadTxIndex(txin.prevout.hash, txindex))

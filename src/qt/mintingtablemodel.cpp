@@ -74,7 +74,7 @@ public:
             for(std::map<uint256, CWalletTx>::iterator it = wallet->mapWallet.begin(); it != wallet->mapWallet.end(); ++it)
             {
                 std::vector<KernelRecord> txList = KernelRecord::decomposeOutput(wallet, it->second);
-                for (KernelRecord& kr : txList) {
+                BOOST_FOREACH(KernelRecord& kr, txList) {
                     if(!kr.spent) {
                         cachedWallet.append(kr);
                     }
@@ -137,7 +137,7 @@ public:
                     if(!toInsert.empty()) /* only if something to insert */
                     {
                         int insert_idx = lowerIndex;
-                        for (const KernelRecord &rec : toInsert)
+                        BOOST_FOREACH(const KernelRecord &rec, toInsert)
                         {
                             if(!rec.spent) 
                             {
@@ -160,7 +160,7 @@ public:
                 {               
                     // Updated -- remove spent coins from table
                     std::vector<KernelRecord> toCheck = KernelRecord::decomposeOutput(wallet, mi->second);
-                    for (const KernelRecord &rec : toCheck)
+                    BOOST_FOREACH(const KernelRecord &rec, toCheck)
                     {
                         if(rec.spent)
                         {
@@ -247,7 +247,7 @@ void MintingTableModel::update()
         TRY_LOCK(wallet->cs_wallet, lockWallet);
         if (lockWallet && !wallet->vMintingWalletUpdated.empty())
         {
-            for (uint256 hash : wallet->vMintingWalletUpdated)
+            BOOST_FOREACH(uint256 hash, wallet->vMintingWalletUpdated)
             {
                 updated.append(hash);
 
@@ -255,7 +255,7 @@ void MintingTableModel::update()
                 CWalletTx wtx;
                 if(wallet->GetTransaction(hash, wtx))
                 {
-                    for (const CTxIn& txin : wtx.vin)
+                    BOOST_FOREACH(const CTxIn& txin, wtx.vin)
                     {
                         updated.append(txin.prevout.hash);
                     }

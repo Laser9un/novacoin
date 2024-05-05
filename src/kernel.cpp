@@ -5,11 +5,13 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include <boost/assign/list_of.hpp>
+
 #include "kernel.h"
 #include "kernel_worker.h"
-#include "txdb-leveldb.h"
-#include "main.h"
+#include "txdb.h"
 
+extern unsigned int nStakeMaxAge;
 extern unsigned int nStakeTargetSpacing;
 
 using namespace std;
@@ -28,25 +30,22 @@ typedef std::map<int, unsigned int> MapModifierCheckpoints;
 
 // Hard checkpoints of stake modifiers to ensure they are deterministic
 static std::map<int, unsigned int> mapStakeModifierCheckpoints =
-    {
-        {     0, 0x0e00670bu },
-        { 12661, 0x5d84115du },
-        {143990, 0x9c592c78u },
-        {149000, 0x48f2bdc4u },
-        {160000, 0x789df0f0u },
-        {200000, 0x01ec1503u },
-        {221047, 0x0b39ef50u },
-        {243100, 0xe928d83au },
-        {532000, 0x3e5c2b81u },
-        {561108, 0x9c1860b0u },
-        {712891, 0xee193895u }
-    };
+    boost::assign::map_list_of
+        ( 0, 0x0e00670bu )
+        ( 12661, 0x5d84115du )
+        (143990, 0x9c592c78u )
+        (149000, 0x48f2bdc4u )
+        (160000, 0x789df0f0u )
+        (200000, 0x01ec1503u )
+        (221047, 0x0b39ef50u )
+        (243100, 0xe928d83au )
+    ;
 
 // Hard checkpoints of stake modifiers to ensure they are deterministic (testNet)
 static std::map<int, unsigned int> mapStakeModifierCheckpointsTestNet =
-    {
-        { 0, 0x0e00670bu }
-    };
+    boost::assign::map_list_of
+        ( 0, 0x0e00670bu )
+    ;
 
 // Pregenerated entropy bits table (from genesis to #9689)
 //
@@ -141,7 +140,7 @@ static bool SelectBlockFromCandidates(vector<pair<int64_t, uint256> >& vSortedBy
     bool fSelected = false;
     uint256 hashBest = 0;
     *pindexSelected = (const CBlockIndex*) 0;
-    for (const auto& item : vSortedByTimestamp)
+    BOOST_FOREACH(const PAIRTYPE(int64_t, uint256)& item, vSortedByTimestamp)
     {
         if (!mapBlockIndex.count(item.second))
             return error("SelectBlockFromCandidates: failed to find block index for candidate block %s", item.second.ToString().c_str());
@@ -287,7 +286,7 @@ bool ComputeNextStakeModifier(const CBlockIndex* pindexCurrent, uint64_t& nStake
                 strSelectionMap.replace(pindex->nHeight - nHeightFirstCandidate, 1, "=");
             pindex = pindex->pprev;
         }
-        for (const auto& item : mapSelectedBlocks)
+        BOOST_FOREACH(const PAIRTYPE(uint256, const CBlockIndex*)& item, mapSelectedBlocks)
         {
             // 'S' indicates selected proof-of-stake blocks
             // 'W' indicates selected proof-of-work blocks
@@ -436,12 +435,8 @@ bool ScanKernelForward(unsigned char *kernel, uint32_t nBits, uint32_t nInputTxT
     // TODO: custom threads amount
 
     uint32_t nThreads = boost::thread::hardware_concurrency();
-    if (nThreads == 0)
-    {
-       nThreads = 1;
-       printf("Warning: hardware_concurrency() failed in %s:%d\n", __FILE__, __LINE__);
-    }
     uint32_t nPart = (SearchInterval.second - SearchInterval.first) / nThreads;
+
 
     KernelWorker *workers = new KernelWorker[nThreads];
 
@@ -490,6 +485,10 @@ bool CheckProofOfStake(const CTransaction& tx, unsigned int nBits, uint256& hash
     CTxIndex txindex;
     if (!txPrev.ReadFromDisk(txdb, txin.prevout, txindex))
         return tx.DoS(1, error("CheckProofOfStake() : INFO: read txPrev failed"));  // previous transaction not in main chain, may occur during initial download
+
+#ifndef USE_LEVELDB
+    txdb.Close();
+#endif
 
     // Verify signature
     if (!VerifySignature(txPrev, tx, 0, MANDATORY_SCRIPT_VERIFY_FLAGS, 0))

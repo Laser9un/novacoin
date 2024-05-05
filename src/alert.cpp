@@ -2,11 +2,14 @@
 // Alert system
 //
 
+#include <boost/foreach.hpp>
+#include <map>
+
 #include "alert.h"
 #include "key.h"
 #include "net.h"
 #include "sync.h"
-#include "interface.h"
+#include "ui_interface.h"
 
 using namespace std;
 
@@ -42,10 +45,10 @@ void CUnsignedAlert::SetNull()
 std::string CUnsignedAlert::ToString() const
 {
     std::string strSetCancel;
-    for (int n : setCancel)
+    BOOST_FOREACH(int n, setCancel)
         strSetCancel += strprintf("%d ", n);
     std::string strSetSubVer;
-    for (const std::string& str : setSubVer)
+    BOOST_FOREACH(std::string str, setSubVer)
         strSetSubVer += "\"" + str + "\" ";
     return strprintf(
         "CAlert(\n"
@@ -105,7 +108,7 @@ bool CAlert::Cancels(const CAlert& alert) const
     return (alert.nID <= nCancel || setCancel.count(alert.nID));
 }
 
-bool CAlert::AppliesTo(int nVersion, const std::string& strSubVerIn) const
+bool CAlert::AppliesTo(int nVersion, std::string strSubVerIn) const
 {
     // TODO: rework for client-version-embedded-in-strSubVer ?
     return (IsInEffect() &&
@@ -157,7 +160,7 @@ CAlert CAlert::getAlertByHash(const uint256 &hash)
     CAlert retval;
     {
         LOCK(cs_mapAlerts);
-        auto mi = mapAlerts.find(hash);
+        map<uint256, CAlert>::iterator mi = mapAlerts.find(hash);
         if(mi != mapAlerts.end())
             retval = mi->second;
     }
@@ -196,7 +199,7 @@ bool CAlert::ProcessAlert()
     {
         LOCK(cs_mapAlerts);
         // Cancel previous alerts
-        for (auto mi = mapAlerts.begin(); mi != mapAlerts.end();)
+        for (map<uint256, CAlert>::iterator mi = mapAlerts.begin(); mi != mapAlerts.end();)
         {
             const CAlert& alert = (*mi).second;
             if (Cancels(alert))
@@ -216,7 +219,7 @@ bool CAlert::ProcessAlert()
         }
 
         // Check if this alert has been cancelled
-        for (auto& item : mapAlerts)
+        BOOST_FOREACH(PAIRTYPE(const uint256, CAlert)& item, mapAlerts)
         {
             const CAlert& alert = item.second;
             if (alert.Cancels(*this))

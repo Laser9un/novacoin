@@ -5,12 +5,15 @@
 #ifndef BITCOIN_MAIN_H
 #define BITCOIN_MAIN_H
 
+#include <algorithm>
+
 #include "timestamps.h"
+#include "bignum.h"
 #include "sync.h"
 #include "net.h"
 #include "script.h"
+#include "scrypt.h"
 
-#include <algorithm>
 #include <limits>
 #include <list>
 #include <map>
@@ -24,6 +27,7 @@ class COutPoint;
 
 class CAddress;
 class CInv;
+class CRequestTracker;
 class CNode;
 
 //
@@ -119,7 +123,7 @@ void ThreadScriptCheckQuit();
 
 bool CheckProofOfWork(uint256 hash, unsigned int nBits);
 unsigned int GetNextTargetRequired(const CBlockIndex* pindexLast, bool fProofOfStake);
-int64_t GetProofOfWorkReward(unsigned int nBits);
+int64_t GetProofOfWorkReward(unsigned int nBits, int64_t nFees=0);
 int64_t GetProofOfStakeReward(int64_t nCoinAge, unsigned int nBits, int64_t nTime, bool bCoinYearOnly=false);
 unsigned int ComputeMinWork(unsigned int nBase, int64_t nTime);
 unsigned int ComputeMinStake(unsigned int nBase, int64_t nTime, unsigned int nBlockTime);
@@ -135,6 +139,11 @@ bool VerifySignature(const CTransaction& txFrom, const CTransaction& txTo, unsig
 
 
 
+
+
+
+
+bool GetWalletFile(CWallet* pwallet, std::string &strWalletFileOut);
 
 /** Position on disk for a particular transaction. */
 class CDiskTxPos
@@ -487,7 +496,7 @@ public:
             nBlockTime = GetAdjustedTime();
         if ((int64_t)nLockTime < ((int64_t)nLockTime < LOCKTIME_THRESHOLD ? (int64_t)nBlockHeight : nBlockTime))
             return true;
-        for (const CTxIn& txin : vin)
+        BOOST_FOREACH(const CTxIn& txin, vin)
             if (!txin.IsFinal())
                 return false;
         return true;
@@ -570,7 +579,7 @@ public:
     int64_t GetValueOut() const
     {
         int64_t nValueOut = 0;
-        for (const CTxOut& txout : vout)
+        BOOST_FOREACH(const CTxOut& txout, vout)
         {
             nValueOut += txout.nValue;
             if (!MoneyRange(txout.nValue) || !MoneyRange(nValueOut))
@@ -934,7 +943,10 @@ public:
         return (nBits == 0);
     }
 
-    uint256 GetHash() const;
+    uint256 GetHash() const
+    {
+        return scrypt_blockhash((const uint8_t*)&nVersion);
+    }
 
     int64_t GetBlockTime() const
     {
@@ -986,7 +998,7 @@ public:
     int64_t GetMaxTransactionTime() const
     {
         int64_t maxTransactionTime = 0;
-        for (const CTransaction& tx : vtx)
+        BOOST_FOREACH(const CTransaction& tx, vtx)
             maxTransactionTime = std::max(maxTransactionTime, (int64_t)tx.nTime);
         return maxTransactionTime;
     }
@@ -994,7 +1006,7 @@ public:
     uint256 BuildMerkleTree() const
     {
         vMerkleTree.clear();
-        for (const CTransaction& tx : vtx)
+        BOOST_FOREACH(const CTransaction& tx, vtx)
             vMerkleTree.push_back(tx.GetHash());
         int j = 0;
         for (int nSize = (int)vtx.size(); nSize > 1; nSize = (nSize + 1) / 2)
@@ -1030,7 +1042,7 @@ public:
     {
         if (nIndex == -1)
             return 0;
-        for (const uint256& otherside : vMerkleBranch)
+        BOOST_FOREACH(const uint256& otherside, vMerkleBranch)
         {
             if (nIndex & 1)
                 hash = Hash(BEGIN(otherside), END(otherside), BEGIN(hash), END(hash));
@@ -1543,7 +1555,7 @@ public:
         // Retrace how far back it was in the sender's branch
         int nDistance = 0;
         int nStep = 1;
-        for (const uint256& hash : vHave)
+        BOOST_FOREACH(const uint256& hash, vHave)
         {
             std::map<uint256, CBlockIndex*>::iterator mi = mapBlockIndex.find(hash);
             if (mi != mapBlockIndex.end())
@@ -1562,7 +1574,7 @@ public:
     CBlockIndex* GetBlockIndex()
     {
         // Find the first block the caller has in the main chain
-        for (const uint256& hash : vHave)
+        BOOST_FOREACH(const uint256& hash, vHave)
         {
             std::map<uint256, CBlockIndex*>::iterator mi = mapBlockIndex.find(hash);
             if (mi != mapBlockIndex.end())
@@ -1578,7 +1590,7 @@ public:
     uint256 GetBlockHash()
     {
         // Find the first block the caller has in the main chain
-        for (const uint256& hash : vHave)
+        BOOST_FOREACH(const uint256& hash, vHave)
         {
             std::map<uint256, CBlockIndex*>::iterator mi = mapBlockIndex.find(hash);
             if (mi != mapBlockIndex.end())

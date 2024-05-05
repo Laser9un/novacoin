@@ -1,12 +1,7 @@
 #ifndef NOVACOIN_KERNELWORKER_H
 #define NOVACOIN_KERNELWORKER_H
 
-#include "bignum.h"
-
-#include <cstdint>
 #include <vector>
-
-class uint256;
 
 class KernelWorker
 {

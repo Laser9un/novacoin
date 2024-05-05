@@ -39,7 +39,6 @@ private:
 
 private slots:
     void textChanged();
-	void secureClearPassFields();
     bool event(QEvent *event);
     bool eventFilter(QObject *, QEvent *event);
 };

@@ -4,24 +4,51 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include "util.h"
-#include "allocators.h"
-#include "interface.h"
-#include "random.h"
 #include "sync.h"
 #include "version.h"
+#include "ui_interface.h"
+#include <boost/algorithm/string/join.hpp>
+#include <boost/algorithm/string/case_conv.hpp> // for to_lower()
+#include <boost/algorithm/string/predicate.hpp> // for startswith() and endswith()
+
+// Work around clang compilation problem in Boost 1.46:
+// /usr/include/boost/program_options/detail/config_file.hpp:163:17: error: call to function 'to_internal' that is neither visible in the template definition nor found by argument-dependent lookup
+// See also: http://stackoverflow.com/questions/10020179/compilation-fail-in-boost-librairies-program-options
+//           http://clang.debian.net/status.php?version=3.0&key=CANNOT_FIND_FUNCTION
+namespace boost {
+    namespace program_options {
+        std::string to_internal(const std::string&);
+    }
+}
 
 #include <boost/program_options/detail/config_file.hpp>
+#include <boost/program_options/parsers.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/fstream.hpp>
+
 #include <boost/date_time/posix_time/posix_time.hpp>
+#include <boost/foreach.hpp>
 #include <boost/thread.hpp>
+#include <openssl/crypto.h>
+#include <openssl/rand.h>
 
 #ifdef WIN32
+#ifdef _WIN32_WINNT
+#undef _WIN32_WINNT
+#endif
+#define _WIN32_WINNT 0x0501
+#ifdef _WIN32_IE
+#undef _WIN32_IE
+#endif
+#define _WIN32_IE 0x0501
+#define WIN32_LEAN_AND_MEAN 1
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <io.h> /* for _commit */
 #include "shlobj.h"
-#include <openssl/rand.h> // RAND_screen
 #elif defined(__linux__)
-#include <sys/prctl.h>
+# include <sys/prctl.h>
 #endif
 
 #if !defined(WIN32) && !defined(ANDROID)
@@ -47,6 +74,7 @@ string strMiscWarning;
 bool fTestNet = false;
 bool fNoListen = false;
 bool fLogTimestamps = false;
+CMedianFilter<int64_t> vTimeOffsets(200,0);
 bool fReopenDebugLog = false;
 
 // Extended DecodeDumpTime implementation, see this page for details:
@@ -78,6 +106,8 @@ void locking_callback(int mode, int i, const char* file, int line)
         LEAVE_CRITICAL_SECTION(*ppmutexOpenSSL[i]);
     }
 }
+
+LockedPageManager LockedPageManager::instance;
 
 // Init
 class CInit
@@ -111,6 +141,79 @@ public:
 instance_of_cinit;
 
 
+
+
+
+
+
+
+void RandAddSeed()
+{
+    // Seed with CPU performance counter
+    int64_t nCounter = GetPerformanceCounter();
+    RAND_add(&nCounter, sizeof(nCounter), 1.5);
+    memset(&nCounter, 0, sizeof(nCounter));
+}
+
+void RandAddSeedPerfmon()
+{
+    RandAddSeed();
+
+    // This can take up to 2 seconds, so only do it every 10 minutes
+    static int64_t nLastPerfmon;
+    if (GetTime() < nLastPerfmon + 10 * 60)
+        return;
+    nLastPerfmon = GetTime();
+
+#ifdef WIN32
+    // Don't need this on Linux, OpenSSL automatically uses /dev/urandom
+    // Seed with the entire set of perfmon data
+    unsigned char pdata[250000];
+    memset(pdata, 0, sizeof(pdata));
+    unsigned long nSize = sizeof(pdata);
+    long ret = RegQueryValueExA(HKEY_PERFORMANCE_DATA, "Global", NULL, NULL, pdata, &nSize);
+    RegCloseKey(HKEY_PERFORMANCE_DATA);
+    if (ret == ERROR_SUCCESS)
+    {
+        RAND_add(pdata, nSize, nSize/100.0);
+        OPENSSL_cleanse(pdata, nSize);
+        printf("RandAddSeed() %lu bytes\n", nSize);
+    }
+#endif
+}
+
+uint64_t GetRand(uint64_t nMax)
+{
+    if (nMax == 0)
+        return 0;
+
+    // The range of the random source must be a multiple of the modulus
+    // to give every possible output value an equal possibility
+    uint64_t nRange = (std::numeric_limits<uint64_t>::max() / nMax) * nMax;
+    uint64_t nRand = 0;
+    do
+        RAND_bytes((unsigned char*)&nRand, sizeof(nRand));
+    while (nRand >= nRange);
+    return (nRand % nMax);
+}
+
+int GetRandInt(int nMax)
+{
+    return static_cast<int>(GetRand(nMax));
+}
+
+uint256 GetRandHash()
+{
+    uint256 hash;
+    RAND_bytes((unsigned char*)&hash, sizeof(hash));
+    return hash;
+}
+
+
+
+
+
+
 static FILE* fileout = NULL;
 
 inline int OutputDebugStringF(const char* pszFormat, ...)
@@ -142,9 +245,9 @@ inline int OutputDebugStringF(const char* pszFormat, ...)
             // Since the order of destruction of static/global objects is undefined,
             // allocate mutexDebugLog on the heap the first time this routine
             // is called to avoid crashes during shutdown.
-            static std::mutex* mutexDebugLog = nullptr;
-            if (mutexDebugLog == nullptr) mutexDebugLog = new std::mutex();
-            std::scoped_lock scoped_lock(*mutexDebugLog);
+            static boost::mutex* mutexDebugLog = NULL;
+            if (mutexDebugLog == NULL) mutexDebugLog = new boost::mutex();
+            boost::mutex::scoped_lock scoped_lock(*mutexDebugLog);
 
             // reopen the log file, if requested
             if (fReopenDebugLog) {
@@ -371,7 +474,7 @@ static const signed char phexdigit[256] =
 
 bool IsHex(const string& str)
 {
-    for (unsigned char c : str)
+    BOOST_FOREACH(unsigned char c, str)
     {
         if (phexdigit[c] < 0)
             return false;
@@ -435,8 +538,8 @@ void ParseParameters(int argc, const char* const argv[])
             str = str.substr(0, is_index);
         }
 #ifdef WIN32
-        std::transform(str.begin(), str.end(), str.begin(), ::tolower);
-        if (str.compare(0,1, "/") == 0)
+        boost::to_lower(str);
+        if (boost::algorithm::starts_with(str, "/"))
             str = "-" + str.substr(1);
 #endif
         if (str[0] != '-')
@@ -447,7 +550,7 @@ void ParseParameters(int argc, const char* const argv[])
     }
 
     // New 0.6 features:
-    for (const auto& entry : mapArgs)
+    BOOST_FOREACH(const PAIRTYPE(string,string)& entry, mapArgs)
     {
         string name = entry.first;
 
@@ -872,7 +975,7 @@ std::string EncodeDumpTime(int64_t nTime) {
 
 std::string EncodeDumpString(const std::string &str) {
     std::stringstream ret;
-    for (unsigned char c : str) {
+    BOOST_FOREACH(unsigned char c, str) {
         if (c <= 32 || c >= 128 || c == '%') {
             ret << '%' << HexStr(&c, &c + 1);
         } else {
@@ -1001,7 +1104,7 @@ boost::filesystem::path GetDefaultDataDir()
         pathRet = fs::path("/");
     else
         pathRet = fs::path(pszHome);
-#ifdef __APPLE__
+#ifdef MAC_OSX
     // Mac
     pathRet /= "Library/Application Support";
     fs::create_directory(pathRet);
@@ -1197,12 +1300,109 @@ void ShrinkDebugFile()
 
 
 
+
+
+
+
+//
+// "Never go to sea with two chronometers; take one or three."
+// Our three time sources are:
+//  - System clock
+//  - Median of other nodes clocks
+//  - The user (asking the user to fix the system clock if the first two disagree)
+//
+
 // System clock
 int64_t GetTime()
 {
     int64_t now = time(NULL);
     assert(now > 0);
     return now;
+}
+
+// Trusted NTP offset or median of NTP samples.
+extern int64_t nNtpOffset;
+
+// Median of time samples given by other nodes.
+static int64_t nNodesOffset = INT64_MAX;
+
+// Select time offset:
+int64_t GetTimeOffset()
+{
+    // If NTP and system clock are in agreement within 40 minutes, then use NTP.
+    if (abs64(nNtpOffset) < 40 * 60)
+        return nNtpOffset;
+
+    // If not, then choose between median peer time and system clock.
+    if (abs64(nNodesOffset) < 70 * 60)
+        return nNodesOffset;
+
+    return 0;
+}
+
+int64_t GetNodesOffset()
+{
+        return nNodesOffset;
+}
+
+int64_t GetAdjustedTime()
+{
+    return GetTime() + GetTimeOffset();
+}
+
+void AddTimeData(const CNetAddr& ip, int64_t nTime)
+{
+    int64_t nOffsetSample = nTime - GetTime();
+
+    // Ignore duplicates
+    static set<CNetAddr> setKnown;
+    if (!setKnown.insert(ip).second)
+        return;
+
+    // Add data
+    vTimeOffsets.input(nOffsetSample);
+    printf("Added time data, samples %d, offset %+" PRId64 " (%+" PRId64 " minutes)\n", vTimeOffsets.size(), nOffsetSample, nOffsetSample/60);
+    if (vTimeOffsets.size() >= 5 && vTimeOffsets.size() % 2 == 1)
+    {
+        int64_t nMedian = vTimeOffsets.median();
+        std::vector<int64_t> vSorted = vTimeOffsets.sorted();
+        // Only let other nodes change our time by so much
+        if (abs64(nMedian) < 70 * 60)
+        {
+            nNodesOffset = nMedian;
+        }
+        else
+        {
+            nNodesOffset = INT64_MAX;
+
+            static bool fDone;
+            if (!fDone)
+            {
+                bool fMatch = false;
+
+                // If nobody has a time different than ours but within 5 minutes of ours, give a warning
+                BOOST_FOREACH(int64_t nOffset, vSorted)
+                    if (nOffset != 0 && abs64(nOffset) < 5 * 60)
+                        fMatch = true;
+
+                if (!fMatch)
+                {
+                    fDone = true;
+                    string strMessage = _("Warning: Please check that your computer's date and time are correct! If your clock is wrong NovaCoin will not work properly.");
+                    strMiscWarning = strMessage;
+                    printf("*** %s\n", strMessage.c_str());
+                    uiInterface.ThreadSafeMessageBox(strMessage+" ", string("NovaCoin"), CClientUIInterface::OK | CClientUIInterface::ICON_EXCLAMATION);
+                }
+            }
+        }
+        if (fDebug) {
+            BOOST_FOREACH(int64_t n, vSorted)
+                printf("%+" PRId64 "  ", n);
+            printf("|  ");
+        }
+        if (nNodesOffset != INT64_MAX)
+            printf("nNodesOffset = %+" PRId64 "  (%+" PRId64 " minutes)\n", nNodesOffset, nNodesOffset/60);
+    }
 }
 
 string FormatVersion(int nVersion)
@@ -1225,16 +1425,7 @@ std::string FormatSubVersion(const std::string& name, int nClientVersion, const 
     ss << "/";
     ss << name << ":" << FormatVersion(nClientVersion);
     if (!comments.empty())
-    {
-        ss << "(";
-        for (const auto& st : comments)
-        {
-            ss << st;
-            if (st == comments.back()) break;
-            ss << "; ";
-        }
-        ss << ")";
-    }
+        ss << "(" << boost::algorithm::join(comments, "; ") << ")";
     ss << "/";
     return ss.str();
 }
@@ -1268,10 +1459,16 @@ void RenameThread(const char* name)
 #if defined(PR_SET_NAME)
     // Only the first 15 characters are used (16 - NUL terminator)
     ::prctl(PR_SET_NAME, name, 0, 0, 0);
-#elif (defined(__FreeBSD__) || defined(__OpenBSD__))
+#elif 0 && (defined(__FreeBSD__) || defined(__OpenBSD__))
+    // TODO: This is currently disabled because it needs to be verified to work
+    //       on FreeBSD or OpenBSD first. When verified the '0 &&' part can be
+    //       removed.
     pthread_set_name_np(pthread_self(), name);
-#elif defined(__APPLE__)
-    pthread_setname_np(name);
+
+// This is XCode 10.6-and-later; bring back if we drop 10.5 support:
+// #elif defined(MAC_OSX)
+//    pthread_setname_np(name);
+
 #else
     // Prevent warnings for unused parameters...
     (void)name;
